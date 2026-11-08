@@ -37,7 +37,30 @@
   const PRICE_STEPS = [5000, 6000, 7000, 8000, 9000, 10000, 20000, 30000, 40000, 50000, 60000, 70000,
     80000, 90000, 100000, 110000, 120000, 130000, 140000, 150000, 160000, 170000, 180000, -180000];
   const RENT_STEPS = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 200, -200];   // 음수 = '~' (그 이상)
-  let F = { trades: [], bands: [], pmin: null, pmax: null, rmin: null, rmax: null };
+  const FLOORS = ["1층", "저층", "중간층", "고층", "탑층"];
+  const COUNTS = [["1", "1개"], ["2", "2개"], ["3", "3개"], ["4", "4개 이상"]];
+  const DIRS = ["동", "남동", "서", "남서", "남", "북동", "북", "북서"];
+  const TAGS = ["올수리", "복층", "급매", "세안고"];
+  const emptyF = () => ({ trades: [], bands: [], pmin: null, pmax: null, rmin: null, rmax: null,
+    floor: "", rooms: "", baths: "", dirs: [], tags: [] });
+  let F = emptyF();
+  // 층 구분: 1층 / 탑층 / 저층(아래 1/3, 1층 포함) / 중간층 / 고층(위 1/3, 탑층 포함). '저·중·고'로만 공개된 층도 반영
+  const floorIs = (x, want) => {
+    const f = String(x.floor || ""), n = parseInt(f, 10), t = parseInt(x.totalFloor, 10);
+    if (!want) return true;
+    if (Number.isNaN(n)) return (want === "저층" && f.startsWith("저")) || (want === "중간층" && f.startsWith("중")) ||
+      (want === "고층" && f.startsWith("고"));
+    if (want === "1층") return n === 1;
+    if (!t) return want === "저층" && n <= 3;
+    if (want === "탑층") return n === t;
+    if (want === "저층") return n <= t / 3;
+    if (want === "중간층") return n > t / 3 && n <= (2 * t) / 3;
+    return n > (2 * t) / 3;     // 고층
+  };
+  const cntIs = (v, want) => !want || (want === "4" ? v >= 4 : v === Number(want));
+  const passAttr = (x) => floorIs(x, F.floor) && cntIs(x.rooms || 0, F.rooms) && cntIs(x.baths || 0, F.baths) &&
+    (!F.dirs.length || F.dirs.includes(x.dir)) && F.tags.every((t) => (x.tags || []).includes(t));
+  const attrOn = () => !!(F.floor || F.rooms || F.baths || F.dirs.length || F.tags.length);
   const inGroupOnly = (x) => !groupIds || groupIds.has(x.complexId);
   const passBase = (x) => (!F.trades.length || F.trades.includes(x.trade)) &&
     (!F.bands.length || F.bands.includes(x.band));
@@ -49,9 +72,10 @@
     if (F.rmax != null && (!r || r > F.rmax)) return false;
     return true;
   };
-  const inGroup = (x) => inGroupOnly(x) && passBase(x) && passPrice(x);
+  const inGroup = (x) => inGroupOnly(x) && passBase(x) && passPrice(x) && passAttr(x);
   const filterCount = () => (F.trades.length ? 1 : 0) + (F.bands.length ? 1 : 0) +
-    (F.pmin != null || F.pmax != null ? 1 : 0) + (F.rmin != null || F.rmax != null ? 1 : 0);
+    (F.pmin != null || F.pmax != null ? 1 : 0) + (F.rmin != null || F.rmax != null ? 1 : 0) +
+    (F.floor ? 1 : 0) + (F.rooms ? 1 : 0) + (F.baths ? 1 : 0) + (F.dirs.length ? 1 : 0) + (F.tags.length ? 1 : 0);
 
   // ---------- 복호화 ----------
   async function deriveKey(password, salt, iter) {
@@ -222,7 +246,11 @@
       const f = JSON.parse(store.get(FILTER_STORE) || "{}");
       F = { trades: (f.trades || []).filter((t) => TRADES.includes(t)),
         bands: (f.bands || []).filter((b) => (data.bands || []).includes(b)),
-        pmin: f.pmin ?? null, pmax: f.pmax ?? null, rmin: f.rmin ?? null, rmax: f.rmax ?? null };
+        pmin: f.pmin ?? null, pmax: f.pmax ?? null, rmin: f.rmin ?? null, rmax: f.rmax ?? null,
+        floor: FLOORS.includes(f.floor) ? f.floor : "",
+        rooms: COUNTS.some((c) => c[0] === f.rooms) ? f.rooms : "",
+        baths: COUNTS.some((c) => c[0] === f.baths) ? f.baths : "",
+        dirs: (f.dirs || []).filter((d) => DIRS.includes(d)), tags: (f.tags || []).filter((t) => TAGS.includes(t)) };
     } catch { /* 기본값 */ }
   }
   function stepClick(kind, v) {
@@ -253,6 +281,19 @@
       }).join("");
       el.querySelectorAll("button").forEach((b) => { b.onclick = () => stepClick(rent ? "r" : "p", Number(b.dataset.v)); });
     };
+    // 한 개만 고르는 칸 (전체 포함)
+    const single = (el, key, opts) => {
+      el.innerHTML = [["", "전체"], ...opts].map(([v, t]) =>
+        `<button type="button" aria-pressed="${F[key] === v}" data-v="${esc(v)}">${esc(t)}</button>`).join("");
+      el.querySelectorAll("button").forEach((b) => { b.onclick = () => { F[key] = b.dataset.v; filterChanged(); }; });
+    };
+    single($("#fpFloor"), "floor", FLOORS.map((v) => [v, v]));
+    single($("#fpRooms"), "rooms", COUNTS);
+    single($("#fpBaths"), "baths", COUNTS);
+    $("#fpDir").innerHTML = chip(DIRS, F.dirs, "d");
+    $("#fpDir").querySelectorAll("button").forEach((b) => { b.onclick = () => toggle("dirs", b.dataset.d); });
+    $("#fpTag").innerHTML = chip(TAGS, F.tags, "g");
+    $("#fpTag").querySelectorAll("button").forEach((b) => { b.onclick = () => toggle("tags", b.dataset.g); });
     grid($("#fpPriceGrid"), PRICE_STEPS, false, F.pmin, F.pmax);
     grid($("#fpRentGrid"), RENT_STEPS, true, F.rmin, F.rmax);
     $("#fpPmin").value = F.pmin != null ? manText(F.pmin) : "";
@@ -269,6 +310,11 @@
     if (F.bands.length) parts.push(F.bands.map((b) => (data.bandRanges || {})[b] || b).join("·"));
     if (F.pmin != null || F.pmax != null) parts.push(`${manText(F.pmin) || "0"} ~ ${manText(F.pmax) || ""}`.trim());
     if (F.rmin != null || F.rmax != null) parts.push(`월세 ${F.rmin ?? 0} ~ ${F.rmax ?? ""}`.trim());
+    if (F.floor) parts.push(F.floor);
+    if (F.rooms) parts.push(`방 ${F.rooms === "4" ? "4개 이상" : F.rooms + "개"}`);
+    if (F.baths) parts.push(`욕실 ${F.baths === "4" ? "4개 이상" : F.baths + "개"}`);
+    if (F.dirs.length) parts.push(F.dirs.map((d) => d + "향").join("·"));
+    if (F.tags.length) parts.push(F.tags.join("·"));
     $("#filterSummary").hidden = !parts.length;
     $("#filterSummary").innerHTML = parts.map((p) => `<span>${esc(p)}</span>`).join("") +
       (parts.length ? `<button type="button" id="fsClear">조건 삭제</button>` : "");
@@ -280,7 +326,7 @@
     filterChanged();
   }
   function resetFilter() {
-    F = { trades: [], bands: [], pmin: null, pmax: null, rmin: null, rmax: null };
+    F = emptyF();
     filterChanged();
   }
   function filterChanged() { saveFilter(); drawFilter(); renderLists(); }
@@ -343,7 +389,8 @@
       store.set(POS_STORE, b.dataset.pos); renderToday();
     }));
     // 단지별 카드: 활성 매물(units) · 어제 변동을 필터 조건으로 집계
-    const units = (data.units || []).map((r) => ({ complexId: r[0], trade: r[1], band: r[2], price: r[3], rent: r[4] }))
+    const units = (data.units || []).map((r) => ({ complexId: r[0], trade: r[1], band: r[2], price: r[3], rent: r[4],
+      floor: r[5], totalFloor: r[6], rooms: r[7], baths: r[8], dir: r[9], tags: r[10] ? String(r[10]).split("·") : [] }))
       .filter(inGroup);
     const news = (data.new || []).filter(inGroup), drops = (data.drops || []).filter(inGroup),
       gone = (data.gone || []).filter(inGroup);
@@ -505,7 +552,7 @@
       b.onclick = () => { store.set(BASEMODE_STORE, b.dataset.mode); renderMarket(); };
     });
     const rows = ((mode === "band" ? data.baselinesByBand : data.baselines) || []).filter((b) => inGroupOnly(b) && passBase(b));
-    $("#baseNote").hidden = !(F.pmin != null || F.pmax != null || F.rmin != null || F.rmax != null);
+    $("#baseNote").hidden = !(F.pmin != null || F.pmax != null || F.rmin != null || F.rmax != null || attrOn());
     let html = `<thead><tr><th>${mode === "band" ? "대표 평형" : "평형"}</th><th>거래</th><th>활성</th><th>최저 호가</th><th>호가 중앙값</th><th>기준선</th><th>거래권</th><th>거래권 매물</th></tr></thead><tbody>`;
     let last = null;
     rows.forEach((r) => {
