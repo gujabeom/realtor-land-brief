@@ -173,7 +173,11 @@
 
   function renderHot() {
     const hot = data.hot || [];
-    fillSelect($("#fComplex"), [...new Set(hot.map((h) => h.complex))].sort(), "전체 단지");
+    // 단지 순서 = 마스터의 config/complexes.txt 순서 (complexOrder)
+    const order = (data.complexOrder || []).map((c) => c.name);
+    const present = new Set(hot.map((h) => h.complex));
+    const names = order.filter((n) => present.has(n)).concat([...present].filter((n) => !order.includes(n)));
+    fillSelect($("#fComplex"), names, "전체 단지");
     fillSelect($("#fSupply"), [...new Set(hot.map((h) => h.supply))].sort((a, b) => parseFloat(a) - parseFloat(b))
       .map(String), "전체 평형");
     const apply = () => {
