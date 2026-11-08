@@ -201,6 +201,7 @@
     setupFilter();
     setupBasket();
     renderLists();
+    receiveBasket();   // 주소에 #bk=… 가 있으면 바구니 받기
   }
 
   function renderLists() {
@@ -567,7 +568,7 @@
     $("#bkSel").innerHTML = BK.list.map((x) =>
       `<option value="${esc(x.id)}"${x.id === b.id ? " selected" : ""}>${esc(x.name)} (${x.items.length})</option>`).join("");
     $("#bkDel").disabled = BK.list.length < 2;
-    $("#bkCopy").disabled = $("#bkClear").disabled = !n;
+    $("#bkCopy").disabled = $("#bkClear").disabled = $("#bkShare").disabled = !n;
     $("#bkList").innerHTML = b.items.map((it, i) => {
       const cur = unitById.get(it.unitId), gone = goneById.get(it.unitId);
       const u = cur || { ...it.snap, reasons: [] };
@@ -598,7 +599,98 @@
       };
     });
   }
+  // ---- 다른 기기로 보내기: 바구니(매물 번호·메모·순서)를 링크 주소의 # 뒤에 담는다 (# 뒤는 서버로 전송되지 않음) ----
+  const b64u = (buf) => b64e(buf).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  const unb64u = (t) => b64(t.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - (t.length % 4)) % 4));
+  const pipeBytes = async (bytes, stream) =>
+    new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(stream)).arrayBuffer());
+  async function packBasket(b) {
+    const json = JSON.stringify({ v: 1, n: b.name, i: b.items.map((it) => (it.memo ? [it.unitId, it.memo] : [it.unitId])) });
+    const raw = new TextEncoder().encode(json);
+    if (typeof CompressionStream === "function") return "1." + b64u(await pipeBytes(raw, new CompressionStream("deflate-raw")));
+    return "0." + b64u(raw);
+  }
+  async function unpackBasket(t) {
+    const [ver, body] = [t.slice(0, 1), t.slice(2)];
+    let bytes = unb64u(body);
+    if (ver === "1") bytes = await pipeBytes(bytes, new DecompressionStream("deflate-raw"));
+    const o = JSON.parse(new TextDecoder().decode(bytes));
+    if (!o || !Array.isArray(o.i)) throw new Error("형식 오류");
+    return o;
+  }
+  async function shareBasket() {
+    const b = curBk();
+    const url = `${location.origin}${location.pathname}#bk=${await packBasket(b)}`;
+    $("#shareTitle").textContent = `'${b.name}' 보내기 (${b.items.length}건)`;
+    $("#shareUrl").value = url;
+    let svg = "";
+    try {
+      const qr = qrcode(0, "L");   // 0 = 크기 자동
+      qr.addData(url);
+      qr.make();
+      svg = qr.createSvgTag({ cellSize: 4, margin: 4, scalable: true });
+    } catch { svg = ""; }
+    $("#shareQr").innerHTML = svg || `<p class="muted small">매물이 너무 많아 QR로 만들 수 없습니다. '링크 복사'나 '공유'를 쓰세요.</p>`;
+    $("#shareDense").hidden = !svg || url.length < 900;
+    $("#shareNative").hidden = typeof navigator.share !== "function";
+    const dlg = $("#shareDlg");
+    if (typeof dlg.showModal === "function") dlg.showModal(); else window.prompt("이 링크를 다른 기기에서 여세요", url);
+  }
+  async function receiveBasket() {
+    const m = location.hash.match(/^#bk=([01]\.[A-Za-z0-9_-]+)$/);
+    if (!m || !data) return;
+    history.replaceState(null, "", location.pathname + location.search);   // 주소창에서 지움
+    let o;
+    try { o = await unpackBasket(m[1]); } catch { window.alert("바구니 링크를 읽지 못했습니다. 링크가 잘렸는지 확인하세요."); return; }
+    indexUnits();
+    const items = o.i.map(([uid, memo]) => {
+      const u = unitById.get(uid) || goneById.get(uid);
+      const snap = {};
+      if (u) SNAP_KEYS.forEach((k) => { if (u[k] != null) snap[k] = u[k]; });
+      else Object.assign(snap, { unitId: uid, complex: "(오늘 데이터에 없는 매물)" });
+      return { unitId: uid, savedAt: new Date().toISOString(), snap, memo: memo || "" };
+    });
+    const name = String(o.n || "받은 바구니").slice(0, 60);
+    const choose = () => new Promise((res) => {
+      const dlg = $("#recvDlg");
+      if (typeof dlg.showModal !== "function") { res(window.confirm(`'${name}' ${items.length}건을 새 바구니로 추가할까요?`) ? "new" : ""); return; }
+      $("#recvText").textContent = `'${name}' 바구니 ${items.length}건을 받았습니다.`;
+      $("#recvMerge").textContent = `지금 바구니('${curBk().name}')에 합치기`;
+      dlg.returnValue = "";
+      dlg.onclose = () => res(dlg.returnValue);
+      dlg.showModal();
+    });
+    const how = await choose();
+    if (how === "new") {
+      const same = BK.list.find((x) => x.name === name);
+      const nm = same ? `${name} (받음)` : name;
+      BK.seq = (BK.seq || BK.list.length) + 1;
+      const id = `b${BK.seq}_${Date.now().toString(36)}`;
+      BK.list.push({ id, name: nm, items });
+      BK.cur = id;
+    } else if (how === "merge") {
+      const b = curBk();
+      items.forEach((it) => {
+        const ex = b.items.find((x) => x.unitId === it.unitId);
+        if (!ex) b.items.push(it);
+        else if (it.memo && !ex.memo) ex.memo = it.memo;
+      });
+    } else return;
+    saveBk();
+    renderLists();
+    goTab("basket");
+  }
+
   function setupBasket() {
+    $("#bkShare").onclick = shareBasket;
+    $("#shareCopy").onclick = async () => {
+      const ok = await copyText($("#shareUrl").value);
+      $("#shareMsg").textContent = ok ? "링크를 복사했습니다." : "복사하지 못했습니다. 주소를 길게 눌러 복사하세요.";
+    };
+    $("#shareNative").onclick = () => {
+      navigator.share({ title: "단지 브리핑 바구니", url: $("#shareUrl").value }).catch(() => { /* 취소 */ });
+    };
+    window.addEventListener("hashchange", receiveBasket);
     $("#bkSel").onchange = () => { BK.cur = $("#bkSel").value; saveBk(); renderLists(); };
     $("#bkNew").onclick = () => {
       const name = (window.prompt("새 바구니 이름 (예: 김OO 고객 34평 매매)", `바구니 ${BK.list.length + 1}`) || "").trim();

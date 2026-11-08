@@ -267,3 +267,8 @@ tr.group td { background: var(--bg); font-weight: 600; text-align: left; }
 .pw-wrap input { width: 100%; box-sizing: border-box; padding-right: 72px; }
 .lock-card .pw-show { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); padding: 4px 10px; font-size: 13px;
   background: none; border: 0; color: var(--accent); cursor: pointer; width: auto; }
+.share-dlg { max-width: 420px; width: calc(100% - 32px); }
+.share-qr { background: #fff; border-radius: 8px; padding: 8px; margin: 10px auto; max-width: 300px; }
+.share-qr svg { display: block; width: 100%; height: auto; }
+#shareUrl { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); font-size: 12px; }
+.recv-btns { flex-wrap: wrap; }
