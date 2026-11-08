@@ -226,3 +226,15 @@ tr.group td { background: var(--bg); font-weight: 600; text-align: left; }
 .rank-row { display: flex; align-items: center; gap: 8px; margin: 10px 0 0; flex-wrap: wrap; }
 .rank-gap { margin-left: 8px; }
 .more-btn { width: 100%; padding: 12px; margin-top: 8px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); color: var(--accent); font: inherit; cursor: pointer; }
+.msel { position: relative; }
+.msel-btn { padding: 8px 30px 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--text, inherit);
+  font: inherit; cursor: pointer; text-align: left; max-width: 72vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; position: relative; }
+.msel-btn::after { content: ""; position: absolute; right: 12px; top: 50%; width: 6px; height: 6px; border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor; transform: translateY(-70%) rotate(45deg); opacity: .6; }
+.msel-btn.on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.msel-pop { position: absolute; z-index: 20; top: calc(100% + 4px); left: 0; min-width: 240px; max-width: 90vw; max-height: 60vh; overflow: auto;
+  background: var(--card); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.15); padding: 6px 0; }
+.msel-pop label { display: flex; align-items: center; gap: 8px; padding: 8px 14px; cursor: pointer; white-space: nowrap; }
+.msel-pop label:hover { background: var(--accent-soft); }
+.msel-pop .msel-all { border-bottom: 1px solid var(--line); }
+.msel-pop input { width: 16px; height: 16px; accent-color: var(--accent); }

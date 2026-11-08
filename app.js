@@ -208,7 +208,9 @@
     };
     apply();
     // 그룹(큰 분류)을 바꾸면 급매 탭의 단지·세부 평형 선택은 초기화
-    const resetLocal = () => { ["#fComplex", "#fSupply", "#pComplex", "#pSupply"].forEach((id) => { $(id).value = ""; }); };
+    const LOCAL = ["#fComplex", "#fSupply", "#pComplex", "#pSupply"];
+    const hasLocal = () => LOCAL.some((id) => ($(id)._sel ? $(id)._sel.size : $(id).value));
+    const resetLocal = () => LOCAL.forEach((id) => { if ($(id)._sel) $(id)._sel.clear(); else $(id).value = ""; });
     let clicks = 0, changed = false;
     sel.onchange = () => {
       changed = true;
@@ -221,7 +223,7 @@
     sel.addEventListener("click", () => {
       clicks += 1;
       if (clicks % 2 === 0) {
-        if (!changed && ["#fComplex", "#fSupply", "#pComplex", "#pSupply"].some((id) => $(id).value)) { resetLocal(); renderLists(); }
+        if (!changed && hasLocal()) { resetLocal(); renderLists(); }
         changed = false;
       }
     });
@@ -470,6 +472,41 @@
     if (pairs.some(([v]) => v === cur)) sel.value = cur;
   }
 
+  // 여러 개 고르는 단지 선택 칸 (버튼 + 체크 목록). el._sel = 고른 단지 이름 Set (비면 전체)
+  function multiSelect(el, names, label, onChange) {
+    el._sel = new Set([...(el._sel || [])].filter((n) => names.includes(n)));
+    const text = () => {
+      const n = el._sel.size, first = names.find((x) => el._sel.has(x));
+      return !n ? label : n === 1 ? first : `${first} 외 ${n - 1}곳`;
+    };
+    const wasOpen = el.querySelector(".msel-pop") && !el.querySelector(".msel-pop").hidden;
+    el.innerHTML = `<button type="button" class="msel-btn${el._sel.size ? " on" : ""}" aria-haspopup="true">${esc(text())}</button>
+      <div class="msel-pop"${wasOpen ? "" : " hidden"}>
+        <label class="msel-all"><input type="checkbox" data-v=""${el._sel.size ? "" : " checked"}> ${esc(label)}</label>
+        ${names.map((n) => `<label><input type="checkbox" data-v="${esc(n)}"${el._sel.has(n) ? " checked" : ""}> ${esc(n)}</label>`).join("")}
+      </div>`;
+    const pop = el.querySelector(".msel-pop");
+    el.querySelector(".msel-btn").onclick = (e) => {
+      e.stopPropagation();
+      document.querySelectorAll(".msel-pop").forEach((p) => { if (p !== pop) p.hidden = true; });
+      pop.hidden = !pop.hidden;
+    };
+    pop.onclick = (e) => e.stopPropagation();
+    pop.querySelectorAll("input").forEach((cb) => {
+      cb.onchange = () => {
+        const v = cb.dataset.v;
+        if (!v) el._sel.clear();
+        else if (cb.checked) el._sel.add(v); else el._sel.delete(v);
+        multiSelect(el, names, label, onChange);   // 목록은 열어 둔 채로 다시 그림
+        onChange();
+      };
+    });
+  }
+  document.addEventListener("click", () => document.querySelectorAll(".msel-pop").forEach((p) => { p.hidden = true; }));
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") document.querySelectorAll(".msel-pop").forEach((p) => { p.hidden = true; });
+  });
+
   // 순위 기준에 맞는 점수로 바꾼 급매 목록 (점수 높은 순)
   const rankMode = () => (store.get(RANKMODE_STORE) === "supply" ? "supply" : "band");
   const rankScope = () => (store.get(RANKSCOPE_STORE) === "group" ? "group" : "complex");
@@ -535,7 +572,6 @@
     const order = (data.complexOrder || []).map((c) => c.name);
     const present = new Set(all.map((h) => h.complex));
     const names = order.filter((n) => present.has(n)).concat([...present].filter((n) => !order.includes(n)));
-    fillSelect($(T.c), names, "전체 단지");
     // 세부 평형: "112 (34평)" — 공급면적을 평으로 반올림
     const supplyPy = {};
     all.forEach((h) => { const v = h.py ?? (h.pyeong && Math.round(h.pyeong)); if (h.supply && v && !supplyPy[h.supply]) supplyPy[h.supply] = v; });
@@ -546,8 +582,8 @@
     let shown = PAGE;
     const apply = (keep) => {
       if (!keep) shown = PAGE;
-      const c = $(T.c).value, s = $(T.s).value, o = $(T.o).value;
-      const rows = all.filter((h) => (!c || h.complex === c) && (!s || String(h.supply) === s) &&
+      const cs = $(T.c)._sel || new Set(), s = $(T.s).value, o = $(T.o).value;
+      const rows = all.filter((h) => (!cs.size || cs.has(h.complex)) && (!s || String(h.supply) === s) &&
         (!o || (o === "only" ? h.ours : !h.ours)));
       if ($(T.sort).value === "price") rows.sort(byPrice);   // 아니면 점수순 (hotList 순서)
       $(T.count).textContent = `매물 ${rows.length}건`;
@@ -558,7 +594,8 @@
       const m = $(T.list).querySelector(".more-btn");
       if (m) m.onclick = () => { shown += PAGE; apply(true); };
     };
-    [T.c, T.s, T.o, T.sort].forEach((id) => { $(id).onchange = () => apply(false); });
+    multiSelect($(T.c), names, "전체 단지", () => apply(false));
+    [T.s, T.o, T.sort].forEach((id) => { $(id).onchange = () => apply(false); });
     apply(false);
   }
 
