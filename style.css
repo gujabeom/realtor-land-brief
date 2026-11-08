@@ -1,4 +1,5 @@
 :root {
+  --t-sale: #1b1f24; --t-jeonse: #e8702a; --t-monthly: #3a9a2e; --t-short: #7a4fc4;
   --bg: #f6f7f9; --card: #ffffff; --text: #1b1f24; --muted: #66707a; --line: #e3e6ea;
   --accent: #2563eb; --accent-soft: #e8efff; --down: #d4380d; --down-soft: #fff1ec;
   --up: #1677ff; --good: #2f9e44; --ours: #fff4cc; --ours-line: #f0c94a; --warn-bg: #fff7e6;
@@ -6,6 +7,7 @@
 }
 @media (prefers-color-scheme: dark) {
   :root {
+    --t-sale: #e8eaed; --t-jeonse: #f08a4b; --t-monthly: #5cb84f; --t-short: #9c7ae0;
     --bg: #111418; --card: #1a1f25; --text: #e8eaed; --muted: #9aa3ad; --line: #2b323a;
     --accent: #6b9bff; --accent-soft: #1d2a45; --down: #ff7a50; --down-soft: #3a2018;
     --up: #69a7ff; --good: #5cc275; --ours: #3a3215; --ours-line: #a8872a; --warn-bg: #33270f;
@@ -189,3 +191,28 @@ tr.group td { background: var(--bg); font-weight: 600; text-align: left; }
 .pgrid button.edge { background: var(--accent); color: #fff; }
 .range { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: center; margin-top: 8px; }
 .range input { padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); min-width: 0; }
+
+.hot-count { margin-left: 10px; color: var(--accent); font-weight: 700; font-size: 14px; white-space: nowrap; }
+
+/* 확인 창 */
+.dlg { border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); color: var(--text);
+  padding: 22px 22px 18px; width: min(360px, calc(100vw - 32px)); }
+.dlg::backdrop { background: rgba(0, 0, 0, .35); }
+.dlg h2 { margin: 0 0 8px; font-size: 17px; }
+.dlg p { margin: 0; font-size: 14px; }
+.dlg-btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+.dlg-btns .ghost { padding: 6px 14px; font-size: 13px; }
+
+/* 거래방식 배지와 가격 색 */
+.tb {
+  display: inline-block; font-size: 12px; font-weight: 700; line-height: 1; padding: 4px 7px;
+  border-radius: 6px; margin-right: 8px; vertical-align: 2px; border: 1.5px solid var(--t-sale);
+}
+.tb-sale { background: var(--card); color: var(--t-sale); }
+.tb-jeonse { background: var(--t-jeonse); border-color: var(--t-jeonse); color: #fff; }
+.tb-monthly { background: var(--t-monthly); border-color: var(--t-monthly); color: #fff; }
+.tb-short { background: var(--t-short); border-color: var(--t-short); color: #fff; }
+.price.pr-sale { color: var(--t-sale); }
+.price.pr-jeonse { color: var(--t-jeonse); }
+.price.pr-monthly { color: var(--t-monthly); }
+.price.pr-short { color: var(--t-short); }

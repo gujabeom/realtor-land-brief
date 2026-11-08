@@ -24,7 +24,7 @@
   <header class="top">
     <div class="top-row">
       <h1>단지 브리핑</h1>
-      <button id="lockBtn" class="ghost" type="button">잠금</button>
+      <button id="lockBtn" class="ghost" type="button">로그아웃</button>
     </div>
     <div class="sub-row">
       <p id="asof" class="muted"></p>
@@ -90,7 +90,7 @@
         <option value="exclude">우리 매물 제외</option>
       </select>
     </div>
-    <p class="muted small">점수는 가격 인하, 평형 내 가격 순위, 추정 거래가 대비 차이, 중개사 수, 노출 기간, 특징 문구를 합친 참고값입니다.</p>
+    <p class="muted small hot-note">점수는 가격 인하, 평형 내 가격 순위, 추정 거래가 대비 차이, 중개사 수, 노출 기간, 특징 문구를 합친 참고값입니다.<span id="hotCount" class="hot-count"></span></p>
     <div id="hotList" class="list"></div>
   </section>
 
@@ -146,6 +146,17 @@
     </ul>
   </section>
 </div>
+
+<dialog id="logoutDlg" class="dlg" aria-labelledby="logoutTitle">
+  <form method="dialog">
+    <h2 id="logoutTitle">로그아웃할까요?</h2>
+    <p class="muted">이 기기에 기억된 비밀번호 정보가 지워집니다. 다시 볼 때는 비밀번호를 입력해야 합니다.</p>
+    <div class="dlg-btns">
+      <button value="cancel" class="ghost" type="submit">취소</button>
+      <button value="ok" class="primary small-btn" type="submit">로그아웃</button>
+    </div>
+  </form>
+</dialog>
 
 <script src="app.js"></script>
 </body>

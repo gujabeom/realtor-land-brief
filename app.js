@@ -115,7 +115,18 @@
       btn.disabled = false; btn.textContent = "열기";
     }
   });
-  $("#lockBtn").addEventListener("click", () => { store.del(KEY_STORE); data = null; showLock(""); });
+  // 로그아웃: 확인 창 → 기억된 키 삭제 → 비밀번호 화면
+  function logout() { store.del(KEY_STORE); data = null; showLock(""); }
+  $("#lockBtn").addEventListener("click", () => {
+    const dlg = $("#logoutDlg");
+    if (typeof dlg.showModal !== "function") {   // <dialog> 미지원 브라우저
+      if (window.confirm("로그아웃할까요?")) logout();
+      return;
+    }
+    dlg.returnValue = "";
+    dlg.onclose = () => { if (dlg.returnValue === "ok") logout(); };
+    dlg.showModal();
+  });
 
   // ---------- 탭 ----------
   document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => {
@@ -343,10 +354,15 @@
       </div>`).join("")) || `<p class="empty">이 조건의 매물이 없습니다.</p>`;
   }
 
+  // 거래방식 배지 · 가격 색 (매매=흰 배경, 전세=주황, 월세=초록, 단기임대=보라)
+  const TRADE_CLASS = { "매매": "sale", "전세": "jeonse", "월세": "monthly", "단기임대": "short" };
+  const tradeBadge = (t) => t ? `<span class="tb tb-${TRADE_CLASS[t] || "sale"}">${esc(t)}</span>` : "";
+
   function itemHtml(u, opt = {}) {
+    const tcls = TRADE_CLASS[u.trade] || "sale";
     const ours = u.ours ? `<span class="badge-ours">우리</span>` : "";
     const floor = u.totalFloor ? `${u.floor}/${u.totalFloor}층` : `${u.floor || "-"}층`;
-    const meta = [u.trade, u.supply && `${u.supply}㎡${u.pyeong ? ` (${u.pyeong}평)` : ""}`,
+    const meta = [u.supply && `${u.supply}㎡${u.pyeong ? ` (${u.pyeong}평)` : ""}`,
       u.dong && `${u.dong}동`, floor, u.direction, u.brokerCount && `중개사 ${u.brokerCount}`,
       u.daysOnMarket != null && `노출 ${u.daysOnMarket}일`].filter(Boolean).join(" · ");
     let price = esc(u.priceText || "");
@@ -358,19 +374,21 @@
     const reasons = (u.reasons || []).map((r) => `<span>${esc(r)}</span>`).join("");
     return `<article class="item${u.ours ? " ours" : ""}${opt.score ? "" : " noscore"}">
       ${opt.score ? `<div class="score" title="점수">${Math.round(u.score)}</div>` : ""}
-      <div class="title">${esc(u.complex)}${ours}</div>
-      <div class="price">${price}</div>
+      <div class="title">${tradeBadge(u.trade)}${esc(u.complex)}${ours}</div>
+      <div class="price pr-${tcls}">${price}</div>
       <div class="meta">${esc(meta)}</div>
       ${reasons ? `<div class="reasons">${reasons}</div>` : ""}
       ${u.feature ? `<div class="feature">${esc(u.feature)}</div>` : ""}
     </article>`;
   }
 
+  // values: 값 목록, 또는 [값, 표시 글자] 목록
   function fillSelect(sel, values, label) {
     const cur = sel.value;
+    const pairs = values.map((v) => (Array.isArray(v) ? v : [v, v]));
     sel.innerHTML = `<option value="">${label}</option>` +
-      values.map((v) => `<option value="${esc(v)}">${esc(v)}</option>`).join("");
-    if (values.includes(cur)) sel.value = cur;
+      pairs.map(([v, t]) => `<option value="${esc(v)}">${esc(t)}</option>`).join("");
+    if (pairs.some(([v]) => v === cur)) sel.value = cur;
   }
 
   function renderHot() {
@@ -380,12 +398,18 @@
     const present = new Set(hot.map((h) => h.complex));
     const names = order.filter((n) => present.has(n)).concat([...present].filter((n) => !order.includes(n)));
     fillSelect($("#fComplex"), names, "전체 단지");
-    fillSelect($("#fSupply"), [...new Set(hot.map((h) => h.supply))].sort((a, b) => parseFloat(a) - parseFloat(b) || String(a).localeCompare(String(b)))
-      .map(String), "세부 평형 전체");
+    // 세부 평형: "112 (34평)" — 공급면적을 평으로 반올림
+    const supplyPy = {};
+    hot.forEach((h) => { const v = h.py ?? (h.pyeong && Math.round(h.pyeong)); if (h.supply && v && !supplyPy[h.supply]) supplyPy[h.supply] = v; });
+    const supplies = [...new Set(hot.map((h) => String(h.supply)))]
+      .sort((a, b) => parseFloat(a) - parseFloat(b) || a.localeCompare(b));
+    fillSelect($("#fSupply"), supplies.map((v) =>
+      [v, supplyPy[v] ? `${v} (${supplyPy[v]}평)` : v]), "세부 평형 전체");
     const apply = () => {
       const c = $("#fComplex").value, s = $("#fSupply").value, o = $("#fOurs").value;
       const rows = hot.filter((h) => (!c || h.complex === c) && (!s || String(h.supply) === s) &&
         (!o || (o === "only" ? h.ours : !h.ours)));
+      $("#hotCount").textContent = `매물 ${rows.length}건`;
       $("#hotList").innerHTML = rows.map((h) => itemHtml(h, { score: true })).join("") ||
         `<p class="empty">조건에 맞는 매물이 없습니다.</p>`;
     };
