@@ -8,6 +8,7 @@
   const GROUP_STORE = "nlb.group";
   const FILTER_STORE = "nlb.filter.v1";
   const BASEMODE_STORE = "nlb.basemode";
+  const RANKMODE_STORE = "nlb.rankmode";   // 급매 점수의 가격 비교 묶음: band(대표 평형, 기본) / supply(세부 평형)
   const STALE_HOURS = 36;
   const POSITIONS = [
     { id: "buyer", label: "매수 손님 응대" },
@@ -355,7 +356,7 @@
         monthly: us.filter((u) => u.trade === "월세" || u.trade === "단기임대").length,
         new: c(news), drop: c(drops), gone: c(gone) };
     }).filter((s) => !filtered || s.active || s.new || s.drop || s.gone);
-    const acts = buildActions({ cards, news, drops, gone, hot: (data.hot || []).filter(inGroup),
+    const acts = buildActions({ cards, news, drops, gone, hot: hotList().filter(inGroup),
       baselines: (data.baselines || []).filter((b) => inGroupOnly(b) && passBase(b)),
       trends: !groupIds && !filtered ? (data.trends || []) : [] })[cur] || [];
     $("#actions").innerHTML = acts.map((a) => `<li>${esc(a)}</li>`).join("") ||
@@ -411,8 +412,22 @@
     if (pairs.some(([v]) => v === cur)) sel.value = cur;
   }
 
+  // 순위 기준에 맞는 점수로 바꾼 급매 목록 (점수 높은 순)
+  const rankMode = () => (store.get(RANKMODE_STORE) === "supply" ? "supply" : "band");
+  function hotList() {
+    const list = data.hot || [];
+    if (rankMode() === "band" || !list.some((h) => h.scoreS != null)) return list;
+    return list.map((h) => ({ ...h, score: h.scoreS ?? h.score, reasons: h.reasonsS || h.reasons }))
+      .sort((a, b) => (b.score || 0) - (a.score || 0));
+  }
+
   function renderHot() {
-    const hot = (data.hot || []).filter(inGroup);
+    const mode = rankMode();
+    document.querySelectorAll("#rankMode button").forEach((b) => {
+      b.setAttribute("aria-checked", b.dataset.mode === mode);
+      b.onclick = () => { store.set(RANKMODE_STORE, b.dataset.mode); renderLists(); };
+    });
+    const hot = hotList().filter(inGroup);
     // 단지 순서 = 마스터의 config/complexes.txt 순서 (complexOrder)
     const order = (data.complexOrder || []).map((c) => c.name);
     const present = new Set(hot.map((h) => h.complex));
