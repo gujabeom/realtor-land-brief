@@ -216,3 +216,7 @@ tr.group td { background: var(--bg); font-weight: 600; text-align: left; }
 .price.pr-jeonse { color: var(--t-jeonse); }
 .price.pr-monthly { color: var(--t-monthly); }
 .price.pr-short { color: var(--t-short); }
+.guide-table { margin: 8px 0; }
+.guide-table th, .guide-table td { text-align: left; white-space: normal; vertical-align: top; }
+.guide-table td:nth-child(2), .guide-table th:nth-child(2) { text-align: center; white-space: nowrap; }
+.guide-table td:first-child { white-space: nowrap; font-weight: 600; }
