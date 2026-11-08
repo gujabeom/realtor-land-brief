@@ -126,6 +126,7 @@
     $("#app").hidden = true;
     $("#lock").hidden = false;
     $("#lockMsg").textContent = msg;
+    if ($("#pw").type !== "password") $("#pwShow").click();   // 잠금 화면은 다시 가린 상태로
     $("#pw").focus();
   }
 
@@ -150,6 +151,18 @@
     }
   });
   // 로그아웃: 확인 창 → 기억된 키 삭제 → 비밀번호 화면
+  // 비밀번호 보기/숨기기 (입력 중인 글자는 그대로, 커서 위치도 유지)
+  $("#pwShow").addEventListener("click", () => {
+    const pw = $("#pw"), show = pw.type === "password";
+    const a = pw.selectionStart, z = pw.selectionEnd;
+    pw.type = show ? "text" : "password";
+    $("#pwShow").textContent = show ? "숨기기" : "보기";
+    $("#pwShow").setAttribute("aria-pressed", show);
+    $("#pwShow").setAttribute("aria-label", show ? "비밀번호 숨기기" : "비밀번호 보기");
+    pw.focus();
+    try { pw.setSelectionRange(a, z); } catch { /* */ }
+  });
+
   function logout() { store.del(KEY_STORE); data = null; showLock(""); }
   $("#lockBtn").addEventListener("click", () => {
     const dlg = $("#logoutDlg");
@@ -175,8 +188,10 @@
     $("#app").hidden = false;
     const m = data.meta;
     const at = m.collectedAt || m.generatedAt;   // 수집 시각 (예전 데이터는 생성 시각)
-    $("#asof").textContent = `데이터 기준 ${m.dataDate} · 수집 ${at.slice(0, 16).replace("T", " ")} · 단지 ${m.complexes}곳`;
     const ageH = (Date.now() - Date.parse(at)) / 36e5;
+    const ago = ageH < 1 ? `${Math.max(0, Math.floor(ageH * 60))}분 전` : ageH < 48 ? `${Math.floor(ageH)}시간 전` : `${Math.floor(ageH / 24)}일 전`;
+    const when = `${at.slice(0, 10)} ${at.slice(11, 13)}시${at.slice(14, 16)}분`;
+    $("#asof").textContent = `데이터 기준 ${m.dataDate} · 수집 ${when} (${ago}) · 단지 ${m.complexes}곳`;
     const warns = [];
     if (ageH > STALE_HOURS) warns.push(`데이터가 ${Math.floor(ageH)}시간 전 것입니다. 마스터 PC 수집을 확인하세요.`);
     if (m.failed && m.failed.length) warns.push(`수집이 불완전한 단지: ${m.failed.join(", ")}`);

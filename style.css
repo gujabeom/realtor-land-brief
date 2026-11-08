@@ -35,7 +35,7 @@ button, select, input { font: inherit; color: inherit; }
   border-radius: var(--radius); padding: 28px 24px; display: grid; gap: 12px;
 }
 .lock-card p { margin: 0; }
-.lock-card input[type=password] {
+.lock-card input[type=password], .lock-card #pw {
   padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg);
 }
 .check { display: flex; gap: 8px; align-items: center; font-size: 14px; color: var(--muted); }
@@ -263,3 +263,7 @@ tr.group td { background: var(--bg); font-weight: 600; text-align: left; }
 .item.noscore .bk-tools, .item.noscore .bk-status { grid-column: 1 / -1; }
 .tabs .badge { margin-left: 4px; vertical-align: 1px; }
 @media (max-width: 520px) { .bk-tools, .bk-status { grid-column: 1 / -1; } }
+.pw-wrap { position: relative; }
+.pw-wrap input { width: 100%; box-sizing: border-box; padding-right: 72px; }
+.lock-card .pw-show { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); padding: 4px 10px; font-size: 13px;
+  background: none; border: 0; color: var(--accent); cursor: pointer; width: auto; }

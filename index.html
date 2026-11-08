@@ -13,7 +13,10 @@
   <form id="lockForm" class="lock-card" autocomplete="off">
     <h1>단지 브리핑</h1>
     <p class="muted">관리자에게 받은 비밀번호를 입력하세요.</p>
-    <input id="pw" type="password" placeholder="비밀번호" autocomplete="current-password" required>
+    <div class="pw-wrap">
+      <input id="pw" type="password" placeholder="비밀번호" autocomplete="current-password" required>
+      <button id="pwShow" type="button" class="pw-show" aria-pressed="false" aria-label="비밀번호 보기">보기</button>
+    </div>
     <label class="check"><input id="remember" type="checkbox" checked> 이 기기에서 기억</label>
     <button id="unlockBtn" type="submit">열기</button>
     <p id="lockMsg" class="error" role="alert"></p>
