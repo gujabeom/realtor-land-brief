@@ -89,7 +89,11 @@
       base, { name: "AES-GCM", length: 256 }, true, ["decrypt"]);
   }
   async function decryptWith(key) {
-    const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: b64(enc.iv) }, key, b64(enc.ct));
+    let plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: b64(enc.iv) }, key, b64(enc.ct));
+    if (enc.z === "gzip") {   // 마스터가 압축 후 암호화
+      const ds = new Blob([plain]).stream().pipeThrough(new DecompressionStream("gzip"));
+      plain = await new Response(ds).arrayBuffer();
+    }
     return JSON.parse(new TextDecoder().decode(plain));
   }
   async function tryStoredKey() {
@@ -204,7 +208,7 @@
     };
     apply();
     // 그룹(큰 분류)을 바꾸면 급매 탭의 단지·세부 평형 선택은 초기화
-    const resetLocal = () => { $("#fComplex").value = ""; $("#fSupply").value = ""; };
+    const resetLocal = () => { ["#fComplex", "#fSupply", "#pComplex", "#pSupply"].forEach((id) => { $(id).value = ""; }); };
     let clicks = 0, changed = false;
     sel.onchange = () => {
       changed = true;
@@ -217,7 +221,7 @@
     sel.addEventListener("click", () => {
       clicks += 1;
       if (clicks % 2 === 0) {
-        if (!changed && ($("#fComplex").value || $("#fSupply").value)) { resetLocal(); renderLists(); }
+        if (!changed && ["#fComplex", "#fSupply", "#pComplex", "#pSupply"].some((id) => $(id).value)) { resetLocal(); renderLists(); }
         changed = false;
       }
     });
@@ -514,29 +518,48 @@
       if (b.dataset.scope === "group") b.textContent = groupIds ? "그룹 통합" : "전체 통합";
       b.onclick = () => { store.set(RANKSCOPE_STORE, b.dataset.scope); renderLists(); };
     });
-    const hot = hotList().filter(inGroup);
+    renderUnitTab(HOT_TAB);
+    renderUnitTab(PRICE_TAB);
+  }
+
+  // 급매 탭과 가격 탭: 같은 매물 목록을 정렬만 달리해서 보여 준다
+  const HOT_TAB = { c: "#fComplex", s: "#fSupply", o: "#fOurs", sort: "#hotSort", list: "#hotList", count: "#hotCount" };
+  const PRICE_TAB = { c: "#pComplex", s: "#pSupply", o: "#pOurs", sort: "#prSort", list: "#prList", count: "#prCount" };
+  const TRADE_ORDER = { 매매: 0, 전세: 1, 월세: 2, 단기임대: 3 };
+  const byPrice = (a, b) => (TRADE_ORDER[a.trade] ?? 9) - (TRADE_ORDER[b.trade] ?? 9) ||
+    (a.price || 0) - (b.price || 0) || (a.rent || 0) - (b.rent || 0) || (b.score || 0) - (a.score || 0);
+  const PAGE = 100;
+  function renderUnitTab(T) {
+    const all = hotList().filter(inGroup);
     // 단지 순서 = 마스터의 config/complexes.txt 순서 (complexOrder)
     const order = (data.complexOrder || []).map((c) => c.name);
-    const present = new Set(hot.map((h) => h.complex));
+    const present = new Set(all.map((h) => h.complex));
     const names = order.filter((n) => present.has(n)).concat([...present].filter((n) => !order.includes(n)));
-    fillSelect($("#fComplex"), names, "전체 단지");
+    fillSelect($(T.c), names, "전체 단지");
     // 세부 평형: "112 (34평)" — 공급면적을 평으로 반올림
     const supplyPy = {};
-    hot.forEach((h) => { const v = h.py ?? (h.pyeong && Math.round(h.pyeong)); if (h.supply && v && !supplyPy[h.supply]) supplyPy[h.supply] = v; });
-    const supplies = [...new Set(hot.map((h) => String(h.supply)))]
+    all.forEach((h) => { const v = h.py ?? (h.pyeong && Math.round(h.pyeong)); if (h.supply && v && !supplyPy[h.supply]) supplyPy[h.supply] = v; });
+    const supplies = [...new Set(all.map((h) => String(h.supply)))]
       .sort((a, b) => parseFloat(a) - parseFloat(b) || a.localeCompare(b));
-    fillSelect($("#fSupply"), supplies.map((v) =>
+    fillSelect($(T.s), supplies.map((v) =>
       [v, supplyPy[v] ? `${v} (${supplyPy[v]}평)` : v]), "세부 평형 전체");
-    const apply = () => {
-      const c = $("#fComplex").value, s = $("#fSupply").value, o = $("#fOurs").value;
-      const rows = hot.filter((h) => (!c || h.complex === c) && (!s || String(h.supply) === s) &&
+    let shown = PAGE;
+    const apply = (keep) => {
+      if (!keep) shown = PAGE;
+      const c = $(T.c).value, s = $(T.s).value, o = $(T.o).value;
+      const rows = all.filter((h) => (!c || h.complex === c) && (!s || String(h.supply) === s) &&
         (!o || (o === "only" ? h.ours : !h.ours)));
-      $("#hotCount").textContent = `매물 ${rows.length}건`;
-      $("#hotList").innerHTML = rows.map((h) => itemHtml(h, { score: true })).join("") ||
-        `<p class="empty">조건에 맞는 매물이 없습니다.</p>`;
+      if ($(T.sort).value === "price") rows.sort(byPrice);   // 아니면 점수순 (hotList 순서)
+      $(T.count).textContent = `매물 ${rows.length}건`;
+      const more = rows.length > shown
+        ? `<button type="button" class="more-btn">더 보기 (${rows.length - shown}건 남음)</button>` : "";
+      $(T.list).innerHTML = (rows.slice(0, shown).map((h) => itemHtml(h, { score: true })).join("") ||
+        `<p class="empty">조건에 맞는 매물이 없습니다.</p>`) + more;
+      const m = $(T.list).querySelector(".more-btn");
+      if (m) m.onclick = () => { shown += PAGE; apply(true); };
     };
-    ["#fComplex", "#fSupply", "#fOurs"].forEach((id) => { $(id).onchange = apply; });
-    apply();
+    [T.c, T.s, T.o, T.sort].forEach((id) => { $(id).onchange = () => apply(false); });
+    apply(false);
   }
 
   function renderChanges() {

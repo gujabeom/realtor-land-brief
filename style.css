@@ -225,3 +225,4 @@ tr.group td { background: var(--bg); font-weight: 600; text-align: left; }
 .band-chip[aria-pressed="true"] small { color: inherit; opacity: .8; }
 .rank-row { display: flex; align-items: center; gap: 8px; margin: 10px 0 0; flex-wrap: wrap; }
 .rank-gap { margin-left: 8px; }
+.more-btn { width: 100%; padding: 12px; margin-top: 8px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); color: var(--accent); font: inherit; cursor: pointer; }
