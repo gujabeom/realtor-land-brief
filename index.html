@@ -30,9 +30,10 @@
       <p id="asof" class="muted"></p>
       <div class="global-filters">
         <select id="fGroup" aria-label="단지 그룹" hidden><option value="">전체 단지</option></select>
-        <select id="fBand" aria-label="대표 평형" hidden><option value="">전체 평형</option></select>
+        <button id="filterBtn" type="button" class="filter-btn" aria-expanded="false" aria-controls="filterPanel">필터<span id="filterCount" class="badge" hidden></span></button>
       </div>
     </div>
+    <div id="filterSummary" class="filter-summary" hidden></div>
     <p id="warn" class="warn" hidden></p>
     <nav class="tabs" role="tablist">
       <button role="tab" data-tab="today" aria-selected="true">오늘</button>
@@ -42,6 +43,34 @@
       <button role="tab" data-tab="guide">안내</button>
     </nav>
   </header>
+
+  <section id="filterPanel" class="filter-panel" hidden aria-label="필터">
+    <div class="fp-head">
+      <h2>필터</h2>
+      <div>
+        <button id="fpReset" type="button" class="ghost">조건 삭제</button>
+        <button id="fpClose" type="button" class="primary small-btn">적용</button>
+      </div>
+    </div>
+    <h3>거래방식 <span class="muted small">여러 개 선택</span></h3>
+    <div id="fpTrade" class="chips"></div>
+    <h3>면적(대표 평형) <span class="muted small">여러 개 선택</span></h3>
+    <div id="fpBand" class="chips"></div>
+    <h3>매매가 / 전세가 / 보증금 <span class="muted small">첫 클릭 최소, 두 번째 클릭 최대</span></h3>
+    <div id="fpPriceGrid" class="pgrid"></div>
+    <div class="range">
+      <input id="fpPmin" inputmode="decimal" placeholder="최소 (예: 3억, 3.5억, 35000)">
+      <span>~</span>
+      <input id="fpPmax" inputmode="decimal" placeholder="최대">
+    </div>
+    <h3>월세 <span class="muted small">만원</span></h3>
+    <div id="fpRentGrid" class="pgrid"></div>
+    <div class="range">
+      <input id="fpRmin" inputmode="numeric" placeholder="최소">
+      <span>~</span>
+      <input id="fpRmax" inputmode="numeric" placeholder="최대">
+    </div>
+  </section>
 
   <section id="tab-today" class="tab">
     <h2>오늘의 포지션</h2>
@@ -90,6 +119,7 @@
     </div>
     <p class="muted small">기준선 = 최근 사라진 매물(거래 추정) 마지막 호가의 중앙값. 거래권 = 기준선 ~ +5%.</p>
     <div class="table-wrap"><table id="baseTable"></table></div>
+    <p id="baseNote" class="muted small" hidden>가격·월세 조건은 기준선 표에는 적용하지 않습니다.</p>
   </section>
 
   <section id="tab-guide" class="tab guide" hidden>
