@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>단지 브리핑</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main id="lock" class="lock" hidden>
+  <form id="lockForm" class="lock-card" autocomplete="off">
+    <h1>단지 브리핑</h1>
+    <p class="muted">관리자에게 받은 비밀번호를 입력하세요.</p>
+    <input id="pw" type="password" placeholder="비밀번호" autocomplete="current-password" required>
+    <label class="check"><input id="remember" type="checkbox" checked> 이 기기에서 기억</label>
+    <button id="unlockBtn" type="submit">열기</button>
+    <p id="lockMsg" class="error" role="alert"></p>
+  </form>
+</main>
+
+<div id="app" hidden>
+  <header class="top">
+    <div class="top-row">
+      <h1>단지 브리핑</h1>
+      <button id="lockBtn" class="ghost" type="button">잠금</button>
+    </div>
+    <p id="asof" class="muted"></p>
+    <p id="warn" class="warn" hidden></p>
+    <nav class="tabs" role="tablist">
+      <button role="tab" data-tab="today" aria-selected="true">오늘</button>
+      <button role="tab" data-tab="hot">급매</button>
+      <button role="tab" data-tab="changes">변동</button>
+      <button role="tab" data-tab="market">시세</button>
+      <button role="tab" data-tab="guide">안내</button>
+    </nav>
+  </header>
+
+  <section id="tab-today" class="tab">
+    <h2>오늘의 포지션</h2>
+    <div id="positions" class="chips" role="radiogroup"></div>
+    <ul id="actions" class="actions"></ul>
+    <h2>단지별 요약 <span class="muted small">어제 대비</span></h2>
+    <div id="summary" class="cards"></div>
+  </section>
+
+  <section id="tab-hot" class="tab" hidden>
+    <div class="filters">
+      <select id="fComplex"><option value="">전체 단지</option></select>
+      <select id="fSupply"><option value="">전체 평형</option></select>
+      <select id="fOurs">
+        <option value="">우리 매물 포함</option>
+        <option value="only">우리 매물만</option>
+        <option value="exclude">우리 매물 제외</option>
+      </select>
+    </div>
+    <p class="muted small">점수는 가격 인하, 평형 내 가격 순위, 추정 거래가 대비 차이, 중개사 수, 노출 기간, 특징 문구를 합친 참고값입니다.</p>
+    <div id="hotList" class="list"></div>
+  </section>
+
+  <section id="tab-changes" class="tab" hidden>
+    <h2>가격 인하 <span id="nDrop" class="count"></span></h2>
+    <div id="dropList" class="list"></div>
+    <h2>신규 <span id="nNew" class="count"></span></h2>
+    <div id="newList" class="list"></div>
+    <h2>사라진 매물 <span id="nGone" class="count"></span> <span class="muted small">거래 추정</span></h2>
+    <div id="goneList" class="list"></div>
+    <div id="riseWrap" hidden>
+      <h2>가격 인상 <span id="nRise" class="count"></span></h2>
+      <div id="riseList" class="list"></div>
+    </div>
+  </section>
+
+  <section id="tab-market" class="tab" hidden>
+    <h2>주간 매물 흐름</h2>
+    <div id="trend" class="chart"></div>
+    <h2>평형별 기준선</h2>
+    <p class="muted small">기준선 = 최근 사라진 매물(거래 추정) 마지막 호가의 중앙값. 거래권 = 기준선 ~ +5%.</p>
+    <div class="table-wrap"><table id="baseTable"></table></div>
+  </section>
+
+  <section id="tab-guide" class="tab guide" hidden>
+    <h2>이렇게 보세요</h2>
+    <ol>
+      <li><b>오늘 탭</b>에서 오늘 집중할 일을 고르면, 그에 맞는 할 일이 위에 나옵니다.</li>
+      <li><b>급매 탭</b>은 거래 가능성이 높은 순서입니다. 이유를 함께 보고 판단하세요.</li>
+      <li><b>변동 탭</b>은 어제 하루 동안 생긴 일입니다. 인하 매물은 기다리던 매수인에게 바로 알리세요.</li>
+      <li><b>시세 탭</b>의 기준선은 매도 상담에서 "어디까지 팔리는지"의 근거가 됩니다.</li>
+    </ol>
+    <h2>용어</h2>
+    <dl>
+      <dt>매물</dt><dd>집 1건. 같은 집을 여러 중개사가 올린 광고는 하나로 묶습니다.</dd>
+      <dt>사라진 매물</dt><dd>목록에서 이틀 연속 보이지 않은 매물. 대부분 거래 완료지만 매도 철회일 수도 있습니다.</dd>
+      <dt>기준선</dt><dd>최근 사라진 매물 마지막 호가의 중앙값. 추정 거래가입니다.</dd>
+      <dt>거래권</dt><dd>기준선부터 +5%까지. 다음에 거래될 가능성이 높은 가격대입니다.</dd>
+      <dt>우리 매물</dt><dd>우리 사무소가 광고 중인 매물. 노란색으로 표시합니다.</dd>
+    </dl>
+    <h2>알아두실 점</h2>
+    <ul>
+      <li>네이버 부동산에 올라온 정보만 봅니다.</li>
+      <li>점수와 추정 거래가는 참고 자료입니다. 층·향·집 상태는 현장 판단이 우선입니다.</li>
+      <li>이 페이지 주소와 비밀번호는 외부에 공유하지 마세요.</li>
+    </ul>
+  </section>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
