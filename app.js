@@ -930,7 +930,7 @@
       $(T.count).textContent = `매물 ${rows.length}건`;
       const more = rows.length > shown
         ? `<button type="button" class="more-btn">더 보기 (${rows.length - shown}건 남음)</button>` : "";
-      $(T.list).innerHTML = (rows.slice(0, shown).map((h) => itemHtml(h, { score: true })).join("") ||
+      $(T.list).innerHTML = (rows.slice(0, shown).map((h) => itemHtml(h, { score: true, extra: adsHtml(h) })).join("") ||
         `<p class="empty">조건에 맞는 매물이 없습니다.</p>`) + more;
       const m = $(T.list).querySelector(".more-btn");
       if (m) m.onclick = () => { shown += PAGE; apply(true); };
