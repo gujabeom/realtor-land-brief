@@ -503,17 +503,17 @@
   const adPrice = (a) => wonText(a[1]) + (a[2] ? `/${Math.round(a[2] / 10000).toLocaleString("ko-KR")}` : "");
   const nvUrl = (cid, art) => `https://new.land.naver.com/complexes/${encodeURIComponent(cid)}?a=APT:ABYG:JGC&e=RETAIL&articleNo=${encodeURIComponent(art)}`;
   // 중개사 목록 (바구니): 우리 사무소 먼저, 낮은 호가 순. 전화번호는 목록 데이터에 없어 네이버 지도 검색으로 연결
-  function adsHtml(u) {
+  function adsHtml(u, gone = false) {
     const ads = u.ads || [];
     if (!ads.length) return "";
     const ps = ads.map((a) => a[1]).filter(Boolean);
     const lo = Math.min(...ps), hi = Math.max(...ps);
     const range = ps.length ? (lo === hi ? wonText(lo) : `${wonText(lo)} ~ ${wonText(hi)}`) : "";
-    return `<details class="bk-ads"><summary>중개사 ${ads.length}곳${range ? ` · 호가 ${esc(range)}` : ""}</summary><ul>` +
+    return `<details class="bk-ads"><summary>${gone ? "마지막 광고 중개사" : "중개사"} ${ads.length}곳${range ? ` · 호가 ${esc(range)}` : ""}</summary><ul>` +
       ads.map((a) => `<li${a[4] ? ' class="ours"' : ""}>
         <span class="bk-ad-name">${a[4] ? '<span class="badge-ours">우리</span> ' : ""}${esc(a[0] || "(이름 없음)")}</span>
         <span class="bk-ad-price${a[1] !== lo ? " hi" : ""}">${esc(adPrice(a))}</span>
-        <span class="bk-ad-links">${a[3] && u.complexId ? `<a href="${nvUrl(u.complexId, a[3])}" target="_blank" rel="noopener noreferrer">광고</a>` : ""}
+        <span class="bk-ad-links">${a[3] && u.complexId && !gone ? `<a href="${nvUrl(u.complexId, a[3])}" target="_blank" rel="noopener noreferrer">광고</a>` : ""}
         ${a[0] ? `<a href="https://map.naver.com/p/search/${encodeURIComponent(a[0])}" target="_blank" rel="noopener noreferrer">연락처</a>` : ""}</span>
       </li>`).join("") + `</ul></details>`;
   }
@@ -943,7 +943,8 @@
   function renderChanges() {
     const sec = (list, el, n, opt) => {
       $(n).textContent = list.length ? `${list.length}건` : "";
-      $(el).innerHTML = list.map((u) => itemHtml(u, opt)).join("") || `<p class="empty">없습니다.</p>`;
+      $(el).innerHTML = list.map((u) => itemHtml(u, { ...opt, extra: adsHtml(u, !!opt.gone) })).join("") ||
+        `<p class="empty">없습니다.</p>`;
     };
     const ok = (x) => inGroup(x) && (!chg || x.complexId === chg.id);
     $("#chgScope").hidden = !chg;
