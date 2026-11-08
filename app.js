@@ -41,7 +41,7 @@
   const FLOORS = ["1층", "저층", "중간층", "고층", "탑층"];
   const COUNTS = [["1", "1개"], ["2", "2개"], ["3", "3개"], ["4", "4개 이상"]];
   const DIRS = ["동", "남동", "서", "남서", "남", "북동", "북", "북서"];
-  const TAGS = ["올수리", "복층", "급매", "세안고"];
+  const TAGS = ["올수리·인테리어", "부분수리", "복층", "급매", "세안고", "로얄", "최상관리", "학교인근"];
   const emptyF = () => ({ trades: [], bands: [], pmin: null, pmax: null, rmin: null, rmax: null,
     floors: [], rooms: [], baths: [], dirs: [], tags: [] });
   let F = emptyF();
