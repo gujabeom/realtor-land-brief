@@ -220,3 +220,6 @@ tr.group td { background: var(--bg); font-weight: 600; text-align: left; }
 .guide-table th, .guide-table td { text-align: left; white-space: normal; vertical-align: top; }
 .guide-table td:nth-child(2), .guide-table th:nth-child(2) { text-align: center; white-space: nowrap; }
 .guide-table td:first-child { white-space: nowrap; font-weight: 600; }
+.band-chip { display: inline-flex; flex-direction: column; align-items: center; line-height: 1.2; }
+.band-chip small { font-size: 11px; color: var(--muted); font-weight: 400; }
+.band-chip[aria-pressed="true"] small { color: inherit; opacity: .8; }

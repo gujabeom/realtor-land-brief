@@ -236,7 +236,11 @@
     const chip = (vals, sel, key) => vals.map((v) =>
       `<button type="button" aria-pressed="${sel.includes(v)}" data-${key}="${esc(v)}">${esc(v)}</button>`).join("");
     $("#fpTrade").innerHTML = chip(TRADES, F.trades, "t");
-    $("#fpBand").innerHTML = chip(data.bands || [], F.bands, "b");
+    const rng = data.bandRanges || {};
+    $("#fpBand").innerHTML = (data.bands || []).map((v) => {
+      const r = rng[v] && rng[v] !== v ? `<small>${esc(rng[v])}</small>` : "";
+      return `<button type="button" class="band-chip" aria-pressed="${F.bands.includes(v)}" data-b="${esc(v)}"><span>${esc(v)}</span>${r}</button>`;
+    }).join("");
     $("#fpTrade").querySelectorAll("button").forEach((b) => { b.onclick = () => toggle("trades", b.dataset.t); });
     $("#fpBand").querySelectorAll("button").forEach((b) => { b.onclick = () => toggle("bands", b.dataset.b); });
     const grid = (el, steps, rent, lo, hi) => {
@@ -261,7 +265,7 @@
     $("#filterBtn").classList.toggle("active", n > 0);
     const parts = [];
     if (F.trades.length) parts.push(F.trades.join("·"));
-    if (F.bands.length) parts.push(F.bands.join("·"));
+    if (F.bands.length) parts.push(F.bands.map((b) => (data.bandRanges || {})[b] || b).join("·"));
     if (F.pmin != null || F.pmax != null) parts.push(`${manText(F.pmin) || "0"} ~ ${manText(F.pmax) || ""}`.trim());
     if (F.rmin != null || F.rmax != null) parts.push(`월세 ${F.rmin ?? 0} ~ ${F.rmax ?? ""}`.trim());
     $("#filterSummary").hidden = !parts.length;
