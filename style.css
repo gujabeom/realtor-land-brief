@@ -48,6 +48,12 @@ button, select, input { font: inherit; color: inherit; }
 .top { position: sticky; top: 0; background: var(--bg); padding-top: 16px; z-index: 5; }
 .top-row { display: flex; justify-content: space-between; align-items: center; }
 .top p { margin: 4px 0 0; font-size: 13px; }
+.sub-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+.sub-row p { margin: 0; }
+#fGroup {
+  padding: 6px 10px; border: 1px solid var(--accent); border-radius: 8px; background: var(--accent-soft);
+  color: var(--accent); font-weight: 600;
+}
 .warn { background: var(--warn-bg); color: var(--warn); padding: 8px 12px; border-radius: 8px; }
 .ghost {
   background: none; border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px;

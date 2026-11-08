@@ -26,7 +26,10 @@
       <h1>단지 브리핑</h1>
       <button id="lockBtn" class="ghost" type="button">잠금</button>
     </div>
-    <p id="asof" class="muted"></p>
+    <div class="sub-row">
+      <p id="asof" class="muted"></p>
+      <select id="fGroup" aria-label="단지 그룹" hidden><option value="">전체 단지</option></select>
+    </div>
     <p id="warn" class="warn" hidden></p>
     <nav class="tabs" role="tablist">
       <button role="tab" data-tab="today" aria-selected="true">오늘</button>

@@ -5,6 +5,7 @@
   "use strict";
   const KEY_STORE = "nlb.key.v1";
   const POS_STORE = "nlb.position";
+  const GROUP_STORE = "nlb.group";
   const STALE_HOURS = 36;
   const POSITIONS = [
     { id: "buyer", label: "매수 손님 응대" },
@@ -27,6 +28,8 @@
 
   let enc = null;
   let data = null;
+  let groupIds = null;   // 선택한 그룹의 단지번호 Set (null = 전체)
+  const inGroup = (x) => !groupIds || groupIds.has(x.complexId);
 
   // ---------- 복호화 ----------
   async function deriveKey(password, salt, iter) {
@@ -112,10 +115,37 @@
     if (m.failed && m.failed.length) warns.push(`수집이 불완전한 단지: ${m.failed.join(", ")}`);
     $("#warn").hidden = !warns.length;
     $("#warn").textContent = warns.join(" ");
+    setupGroups();
+    renderLists();
+  }
+
+  function renderLists() {
     renderToday();
     renderHot();
     renderChanges();
     renderMarket();
+  }
+
+  // 단지 그룹 (마스터 config/complexes.txt 의 '## 그룹명' 줄)
+  function setupGroups() {
+    const groups = data.groups || [];
+    const sel = $("#fGroup");
+    sel.hidden = !groups.length;
+    sel.innerHTML = `<option value="">전체 단지</option>` +
+      groups.map((g, i) => `<option value="${i}">${esc(g.name)}</option>`).join("");
+    const saved = store.get(GROUP_STORE);
+    const idx = groups.findIndex((g) => g.name === saved);
+    sel.value = idx >= 0 ? String(idx) : "";
+    const apply = () => {
+      const g = groups[Number(sel.value)];
+      groupIds = sel.value !== "" && g ? new Set(g.ids) : null;
+    };
+    apply();
+    sel.onchange = () => {
+      apply();
+      if (sel.value === "") store.del(GROUP_STORE); else store.set(GROUP_STORE, groups[Number(sel.value)].name);
+      renderLists();
+    };
   }
 
   function renderToday() {
@@ -125,10 +155,12 @@
     $("#positions").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
       store.set(POS_STORE, b.dataset.pos); renderToday();
     }));
-    const acts = (data.actions && data.actions[cur]) || [];
+    const gname = $("#fGroup").value !== "" ? (data.groups || [])[Number($("#fGroup").value)]?.name : null;
+    const src = gname && data.actionsByGroup && data.actionsByGroup[gname] ? data.actionsByGroup[gname] : data.actions;
+    const acts = (src && src[cur]) || [];
     $("#actions").innerHTML = acts.map((a) => `<li>${esc(a)}</li>`).join("") ||
       `<li class="muted">오늘은 추천할 행동이 없습니다.</li>`;
-    $("#summary").innerHTML = data.summary.map((s) => `
+    $("#summary").innerHTML = data.summary.filter(inGroup).map((s) => `
       <div class="card${s.scannedToday && s.complete ? "" : " stale"}">
         <h3>${esc(s.complex)}</h3>
         <div class="big">${s.active}<span class="muted small"> 건</span></div>
@@ -172,7 +204,7 @@
   }
 
   function renderHot() {
-    const hot = data.hot || [];
+    const hot = (data.hot || []).filter(inGroup);
     // 단지 순서 = 마스터의 config/complexes.txt 순서 (complexOrder)
     const order = (data.complexOrder || []).map((c) => c.name);
     const present = new Set(hot.map((h) => h.complex));
@@ -196,11 +228,12 @@
       $(n).textContent = list.length ? `${list.length}건` : "";
       $(el).innerHTML = list.map((u) => itemHtml(u, opt)).join("") || `<p class="empty">없습니다.</p>`;
     };
-    sec(data.drops || [], "#dropList", "#nDrop", { change: true });
-    sec(data.new || [], "#newList", "#nNew", {});
-    sec(data.gone || [], "#goneList", "#nGone", { gone: true });
-    $("#riseWrap").hidden = !(data.rises && data.rises.length);
-    if (data.rises && data.rises.length) sec(data.rises, "#riseList", "#nRise", { change: true });
+    const rises = (data.rises || []).filter(inGroup);
+    sec((data.drops || []).filter(inGroup), "#dropList", "#nDrop", { change: true });
+    sec((data.new || []).filter(inGroup), "#newList", "#nNew", {});
+    sec((data.gone || []).filter(inGroup), "#goneList", "#nGone", { gone: true });
+    $("#riseWrap").hidden = !rises.length;
+    if (rises.length) sec(rises, "#riseList", "#nRise", { change: true });
   }
 
   function renderMarket() {
@@ -237,7 +270,7 @@
       $("#trend").innerHTML = s;
     }
     // 기준선 표
-    const rows = data.baselines || [];
+    const rows = (data.baselines || []).filter(inGroup);
     let html = `<thead><tr><th>평형</th><th>거래</th><th>활성</th><th>최저 호가</th><th>호가 중앙값</th><th>기준선</th><th>거래권</th><th>거래권 매물</th></tr></thead><tbody>`;
     let last = null;
     rows.forEach((r) => {
