@@ -224,3 +224,4 @@ tr.group td { background: var(--bg); font-weight: 600; text-align: left; }
 .band-chip small { font-size: 11px; color: var(--muted); font-weight: 400; }
 .band-chip[aria-pressed="true"] small { color: inherit; opacity: .8; }
 .rank-row { display: flex; align-items: center; gap: 8px; margin: 10px 0 0; flex-wrap: wrap; }
+.rank-gap { margin-left: 8px; }

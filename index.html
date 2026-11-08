@@ -107,6 +107,11 @@
         <button type="button" role="radio" data-mode="band">대표 평형</button>
         <button type="button" role="radio" data-mode="supply">세부 평형</button>
       </div>
+      <span class="muted small rank-gap">순위 범위</span>
+      <div id="rankScope" class="seg" role="radiogroup" aria-label="순위 범위">
+        <button type="button" role="radio" data-scope="complex">단지별</button>
+        <button type="button" role="radio" data-scope="group">그룹 통합</button>
+      </div>
     </div>
     <p class="muted small hot-note">점수는 평형 내 최저가, 가격 변동, 추정 거래가 대비 차이, 중개사 수, 특징 문구를 합친 참고값입니다 (자세한 기준은 안내 탭).<span id="hotCount" class="hot-count"></span></p>
     <div id="hotList" class="list"></div>
@@ -149,7 +154,7 @@
       <li><b>시세 탭</b>의 기준선은 매도 상담에서 "어디까지 팔리는지"의 근거가 됩니다.</li>
     </ol>
     <h2>급매 점수는 이렇게 매깁니다</h2>
-    <p>급매 탭의 숫자(0~100)는 "곧 거래될 만한 매물인가"를 나타내는 참고 점수입니다. 비교는 언제나 <b>같은 단지 · 같은 평형 · 같은 거래방식</b> 안에서만 합니다. '평형'은 급매 탭의 <b>가격 순위 기준</b>에서 고릅니다. 기본은 대표 평형(예: 32~36평을 한 묶음)이고, 세부 평형(112A, 112B …를 각각 따로)으로 바꿀 수 있습니다.</p>
+    <p>급매 탭의 숫자(0~100)는 "곧 거래될 만한 매물인가"를 나타내는 참고 점수입니다. 비교는 <b>같은 평형 · 같은 거래방식</b> 안에서 하고, 기본은 <b>같은 단지</b> 안에서입니다. 급매 탭의 <b>순위 범위</b>를 '그룹 통합'으로 바꾸면 선택한 그룹(그룹을 고르지 않았으면 전체 단지)의 매물을 한데 놓고 가격을 비교합니다. 단지마다 시세가 다르므로 원래 싼 단지의 매물이 위로 올라오는 점을 감안하세요. '평형'은 급매 탭의 <b>가격 순위 기준</b>에서 고릅니다. 기본은 대표 평형(예: 32~36평을 한 묶음)이고, 세부 평형(112A, 112B …를 각각 따로)으로 바꿀 수 있습니다.</p>
     <div class="table-wrap guide-table"><table>
       <thead><tr><th>항목</th><th>비중</th><th>만점이 되는 조건</th></tr></thead>
       <tbody>

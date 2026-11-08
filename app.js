@@ -8,7 +8,8 @@
   const GROUP_STORE = "nlb.group";
   const FILTER_STORE = "nlb.filter.v1";
   const BASEMODE_STORE = "nlb.basemode";
-  const RANKMODE_STORE = "nlb.rankmode";   // 급매 점수의 가격 비교 묶음: band(대표 평형, 기본) / supply(세부 평형)
+  const RANKMODE_STORE = "nlb.rankmode";
+  const RANKSCOPE_STORE = "nlb.rankscope";  // 순위 범위: complex(단지별, 기본) / group(선택한 그룹 통합)   // 급매 점수의 가격 비교 묶음: band(대표 평형, 기본) / supply(세부 평형)
   const STALE_HOURS = 36;
   const POSITIONS = [
     { id: "buyer", label: "매수 손님 응대" },
@@ -467,11 +468,56 @@
 
   // 순위 기준에 맞는 점수로 바꾼 급매 목록 (점수 높은 순)
   const rankMode = () => (store.get(RANKMODE_STORE) === "supply" ? "supply" : "band");
+  const rankScope = () => (store.get(RANKSCOPE_STORE) === "group" ? "group" : "complex");
+  // 점수 비중·기준 (master/score.py 와 같게 유지)
+  const W = { rank: 9, drop: 3, gap: 2, broker: 1, keyword: 1.5 };
+  const RANK_ZERO = 0.05, CHEAP_G = 0.02, MID_G = 0.05;
+  // 그룹 통합 순위: 선택한 그룹(없으면 전체 단지)의 같은 거래·같은 평형 활성 매물 전체와 가격을 비교해 다시 계산
+  function groupScores(list, mode) {
+    const peers = {};
+    (data.units || []).forEach((r) => {
+      if (groupIds && !groupIds.has(r[0])) return;
+      const k = r[1] + "|" + (mode === "band" ? r[2] : r[11]);
+      (peers[k] = peers[k] || []).push(r[3]);
+    });
+    const rng = data.bandRanges || {};
+    const scopeName = groupIds ? "그룹 내" : "전체 단지";
+    return list.map((h) => {
+      const sp = h.sp;
+      if (!sp) return h;
+      const ps = peers[h.trade + "|" + (mode === "band" ? h.band : h.supply)] || [h.price];
+      const n = ps.length, low = Math.min(...ps), rank = ps.filter((p) => p < h.price).length;
+      const g = low ? h.price / low - 1 : 0;
+      let rs = n > 1 ? Math.max(0, 1 - g / RANK_ZERO) : 0.5;
+      if (sp.lf) rs *= 0.7;
+      const pos = g <= CHEAP_G ? 1 : Math.max(0, (MID_G - g) / (MID_G - CHEAP_G));
+      const reasons = [];
+      if (sp.lf) reasons.push("저층");
+      const label = `${scopeName} ${mode === "band" ? (rng[h.band] || h.band) : h.supply + "㎡"}`;
+      if (rank < 3 && n >= 3) reasons.push(`${label} 중 낮은 가격 ${rank + 1}위/${n}`);
+      let drop = 0;
+      if (sp.d) {
+        drop = sp.d * pos;
+        reasons.push(sp.dt + (pos >= 1 ? " → 최저권" : pos <= 0 ? `, 그래도 ${rank + 1}위/${n}` : ""));
+      } else if (sp.r) { drop = sp.r; reasons.push(sp.rt); }
+      const gap = mode === "band" ? sp.g : sp.gS, gt = mode === "band" ? sp.gt : sp.gtS;
+      if (gap != null && gt) reasons.push(gt);
+      if (sp.bt) reasons.push(sp.bt);
+      if (sp.kt) reasons.push(sp.kt);
+      let num = W.rank * rs + W.drop * drop + W.broker * (sp.b || 0) + W.keyword * (sp.k || 0);
+      let den = W.rank + W.drop + W.broker + W.keyword;
+      if (gap != null) { num += W.gap * gap; den += W.gap; }
+      return { ...h, score: Math.max(0, Math.round((1000 * num) / den) / 10), reasons };
+    });
+  }
   function hotList() {
     const list = data.hot || [];
-    if (rankMode() === "band" || !list.some((h) => h.scoreS != null)) return list;
-    return list.map((h) => ({ ...h, score: h.scoreS ?? h.score, reasons: h.reasonsS || h.reasons }))
-      .sort((a, b) => (b.score || 0) - (a.score || 0));
+    const mode = rankMode();
+    let out;
+    if (rankScope() === "group" && list.some((h) => h.sp)) out = groupScores(list, mode);
+    else if (mode === "band" || !list.some((h) => h.scoreS != null)) return list;
+    else out = list.map((h) => ({ ...h, score: h.scoreS ?? h.score, reasons: h.reasonsS || h.reasons }));
+    return out.sort((a, b) => (b.score || 0) - (a.score || 0));
   }
 
   function renderHot() {
@@ -479,6 +525,12 @@
     document.querySelectorAll("#rankMode button").forEach((b) => {
       b.setAttribute("aria-checked", b.dataset.mode === mode);
       b.onclick = () => { store.set(RANKMODE_STORE, b.dataset.mode); renderLists(); };
+    });
+    const scope = rankScope();
+    document.querySelectorAll("#rankScope button").forEach((b) => {
+      b.setAttribute("aria-checked", b.dataset.scope === scope);
+      if (b.dataset.scope === "group") b.textContent = groupIds ? "그룹 통합" : "전체 통합";
+      b.onclick = () => { store.set(RANKSCOPE_STORE, b.dataset.scope); renderLists(); };
     });
     const hot = hotList().filter(inGroup);
     // 단지 순서 = 마스터의 config/complexes.txt 순서 (complexOrder)
