@@ -173,8 +173,9 @@
     $("#lock").hidden = true;
     $("#app").hidden = false;
     const m = data.meta;
-    $("#asof").textContent = `데이터 기준 ${m.dataDate} · 생성 ${m.generatedAt.slice(0, 16).replace("T", " ")} · 단지 ${m.complexes}곳`;
-    const ageH = (Date.now() - Date.parse(m.generatedAt)) / 36e5;
+    const at = m.collectedAt || m.generatedAt;   // 수집 시각 (예전 데이터는 생성 시각)
+    $("#asof").textContent = `데이터 기준 ${m.dataDate} · 수집 ${at.slice(0, 16).replace("T", " ")} · 단지 ${m.complexes}곳`;
+    const ageH = (Date.now() - Date.parse(at)) / 36e5;
     const warns = [];
     if (ageH > STALE_HOURS) warns.push(`데이터가 ${Math.floor(ageH)}시간 전 것입니다. 마스터 PC 수집을 확인하세요.`);
     if (m.failed && m.failed.length) warns.push(`수집이 불완전한 단지: ${m.failed.join(", ")}`);
@@ -210,7 +211,10 @@
     // 그룹(큰 분류)을 바꾸면 급매 탭의 단지·세부 평형 선택은 초기화
     const LOCAL = ["#fComplex", "#fSupply", "#pComplex", "#pSupply"];
     const hasLocal = () => LOCAL.some((id) => ($(id)._sel ? $(id)._sel.size : $(id).value));
-    const resetLocal = () => LOCAL.forEach((id) => { if ($(id)._sel) $(id)._sel.clear(); else $(id).value = ""; });
+    const resetLocal = () => {
+      LOCAL.forEach((id) => { if ($(id)._sel) $(id)._sel.clear(); else $(id).value = ""; });
+      $("#pTrade").value = ""; chg = null;
+    };
     let clicks = 0, changed = false;
     sel.onchange = () => {
       changed = true;
@@ -422,17 +426,46 @@
     $("#actions").innerHTML = acts.map((a) => `<li>${esc(a)}</li>`).join("") ||
       `<li class="muted">오늘은 추천할 행동이 없습니다.</li>`;
     $("#summaryNote").textContent = filtered ? "필터 조건 기준 · 어제 대비" : "어제 대비";
+    // 카드 안 숫자를 누르면 그 매물로 이동 (지금 필터 조건 그대로 + 단지·거래만 더해서 → 숫자와 목록 건수가 같다)
+    const lnk = (n, attrs, text, cls = "") => n
+      ? `<button type="button" class="lnk ${cls}" ${attrs}>${text}</button>` : `<span class="${cls}">${text}</span>`;
     $("#summary").innerHTML = (cards.map((s) => `
-      <div class="card${s.scannedToday && s.complete ? "" : " stale"}">
-        <h3>${esc(s.complex)}</h3>
-        <div class="big">${s.active}<span class="muted small"> 건</span></div>
-        <div class="muted small">매매 ${s.sale} · 전세 ${s.jeonse} · 월세 ${s.monthly}</div>
+      <div class="card${s.scannedToday && s.complete ? "" : " stale"}" data-cid="${s.complexId}" data-name="${esc(s.complex)}">
+        <h3>${lnk(s.active, `data-go="price"`, esc(s.complex))}</h3>
+        <div class="big">${lnk(s.active, `data-go="price"`, `${s.active}<span class="muted small"> 건</span>`)}</div>
+        <div class="muted small">${lnk(s.sale, `data-go="price" data-trade="매매"`, `매매 ${s.sale}`)} ·
+          ${lnk(s.jeonse, `data-go="price" data-trade="전세"`, `전세 ${s.jeonse}`)} ·
+          ${lnk(s.monthly, `data-go="price" data-trade="월세"`, `월세 ${s.monthly}`)}</div>
         <div class="row">
-          <span class="tag-new">신규 ${s.new}</span>
-          <span class="tag-drop">인하 ${s.drop}</span>
-          <span class="tag-gone">사라짐 ${s.gone}</span>
+          ${lnk(s.new, `data-go="new"`, `신규 ${s.new}`, "tag-new")}
+          ${lnk(s.drop, `data-go="drop"`, `인하 ${s.drop}`, "tag-drop")}
+          ${lnk(s.gone, `data-go="gone"`, `사라짐 ${s.gone}`, "tag-gone")}
         </div>
       </div>`).join("")) || `<p class="empty">이 조건의 매물이 없습니다.</p>`;
+    $("#summary").querySelectorAll(".lnk").forEach((b) => {
+      b.onclick = () => {
+        const card = b.closest(".card"), go = b.dataset.go;
+        if (go === "price") showInPrice(card.dataset.name, b.dataset.trade || "");
+        else showInChanges(Number(card.dataset.cid), card.dataset.name, go);
+      };
+    });
+  }
+
+  const goTab = (name) => document.querySelector(`.tabs button[data-tab="${name}"]`).click();
+  function showInPrice(name, trade) {
+    $("#pComplex")._sel = new Set([name]);
+    $("#pSupply").value = ""; $("#pOurs").value = ""; $("#pTrade").value = trade; $("#prSort").value = "price";
+    renderUnitTab(PRICE_TAB);
+    goTab("price");
+  }
+  let chg = null;   // 변동 탭에서 한 단지만 볼 때 {id, name}
+  function showInChanges(id, name, section) {
+    chg = { id, name };
+    renderChanges();
+    goTab("changes");
+    const target = { drop: "#dropList", new: "#newList", gone: "#goneList" }[section];
+    const h = $(target) && $(target).previousElementSibling;
+    if (h && section !== "drop") h.scrollIntoView({ block: "start" });
   }
 
   // 거래방식 배지 · 가격 색 (매매=흰 배경, 전세=주황, 월세=초록, 단기임대=보라)
@@ -561,7 +594,7 @@
 
   // 급매 탭과 가격 탭: 같은 매물 목록을 정렬만 달리해서 보여 준다
   const HOT_TAB = { c: "#fComplex", s: "#fSupply", o: "#fOurs", sort: "#hotSort", list: "#hotList", count: "#hotCount" };
-  const PRICE_TAB = { c: "#pComplex", s: "#pSupply", o: "#pOurs", sort: "#prSort", list: "#prList", count: "#prCount" };
+  const PRICE_TAB = { c: "#pComplex", s: "#pSupply", o: "#pOurs", t: "#pTrade", sort: "#prSort", list: "#prList", count: "#prCount" };
   const TRADE_ORDER = { 매매: 0, 전세: 1, 월세: 2, 단기임대: 3 };
   const byPrice = (a, b) => (TRADE_ORDER[a.trade] ?? 9) - (TRADE_ORDER[b.trade] ?? 9) ||
     (a.price || 0) - (b.price || 0) || (a.rent || 0) - (b.rent || 0) || (b.score || 0) - (a.score || 0);
@@ -582,8 +615,9 @@
     let shown = PAGE;
     const apply = (keep) => {
       if (!keep) shown = PAGE;
-      const cs = $(T.c)._sel || new Set(), s = $(T.s).value, o = $(T.o).value;
+      const cs = $(T.c)._sel || new Set(), s = $(T.s).value, o = $(T.o).value, t = T.t ? $(T.t).value : "";
       const rows = all.filter((h) => (!cs.size || cs.has(h.complex)) && (!s || String(h.supply) === s) &&
+        (!t || h.trade === t || (t === "월세" && h.trade === "단기임대")) &&
         (!o || (o === "only" ? h.ours : !h.ours)));
       if ($(T.sort).value === "price") rows.sort(byPrice);   // 아니면 점수순 (hotList 순서)
       $(T.count).textContent = `매물 ${rows.length}건`;
@@ -595,7 +629,7 @@
       if (m) m.onclick = () => { shown += PAGE; apply(true); };
     };
     multiSelect($(T.c), names, "전체 단지", () => apply(false));
-    [T.s, T.o, T.sort].forEach((id) => { $(id).onchange = () => apply(false); });
+    [T.s, T.o, T.t, T.sort].filter(Boolean).forEach((id) => { $(id).onchange = () => apply(false); });
     apply(false);
   }
 
@@ -604,10 +638,16 @@
       $(n).textContent = list.length ? `${list.length}건` : "";
       $(el).innerHTML = list.map((u) => itemHtml(u, opt)).join("") || `<p class="empty">없습니다.</p>`;
     };
-    const rises = (data.rises || []).filter(inGroup);
-    sec((data.drops || []).filter(inGroup), "#dropList", "#nDrop", { change: true });
-    sec((data.new || []).filter(inGroup), "#newList", "#nNew", {});
-    sec((data.gone || []).filter(inGroup), "#goneList", "#nGone", { gone: true });
+    const ok = (x) => inGroup(x) && (!chg || x.complexId === chg.id);
+    $("#chgScope").hidden = !chg;
+    if (chg) {
+      $("#chgScope").innerHTML = `<span>${esc(chg.name)}만 보는 중</span><button type="button" id="chgAll">전체 단지 보기</button>`;
+      $("#chgAll").onclick = () => { chg = null; renderChanges(); };
+    }
+    const rises = (data.rises || []).filter(ok);
+    sec((data.drops || []).filter(ok), "#dropList", "#nDrop", { change: true });
+    sec((data.new || []).filter(ok), "#newList", "#nNew", {});
+    sec((data.gone || []).filter(ok), "#goneList", "#nGone", { gone: true });
     $("#riseWrap").hidden = !rises.length;
     if (rises.length) sec(rises, "#riseList", "#nRise", { change: true });
   }

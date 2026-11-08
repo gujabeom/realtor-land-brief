@@ -126,6 +126,12 @@
     <div class="filters">
       <div id="pComplex" class="msel"></div>
       <select id="pSupply"><option value="">세부 평형 전체</option></select>
+      <select id="pTrade" aria-label="거래">
+        <option value="">거래 전체</option>
+        <option value="매매">매매</option>
+        <option value="전세">전세</option>
+        <option value="월세">월세·단기</option>
+      </select>
       <select id="pOurs">
         <option value="">우리 매물 포함</option>
         <option value="only">우리 매물만</option>
@@ -141,6 +147,7 @@
   </section>
 
   <section id="tab-changes" class="tab" hidden>
+    <div id="chgScope" class="filter-summary" hidden></div>
     <h2>가격 인하 <span id="nDrop" class="count"></span></h2>
     <div id="dropList" class="list"></div>
     <h2>신규 <span id="nNew" class="count"></span></h2>
