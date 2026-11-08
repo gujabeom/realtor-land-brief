@@ -6,6 +6,8 @@
   const KEY_STORE = "nlb.key.v1";
   const POS_STORE = "nlb.position";
   const GROUP_STORE = "nlb.group";
+  const BAND_STORE = "nlb.band";
+  const BASEMODE_STORE = "nlb.basemode";
   const STALE_HOURS = 36;
   const POSITIONS = [
     { id: "buyer", label: "매수 손님 응대" },
@@ -29,7 +31,8 @@
   let enc = null;
   let data = null;
   let groupIds = null;   // 선택한 그룹의 단지번호 Set (null = 전체)
-  const inGroup = (x) => !groupIds || groupIds.has(x.complexId);
+  let band = "";         // 선택한 대표 평형 ("" = 전체)
+  const inGroup = (x) => (!groupIds || groupIds.has(x.complexId)) && (!band || x.band === band);
 
   // ---------- 복호화 ----------
   async function deriveKey(password, salt, iter) {
@@ -116,6 +119,7 @@
     $("#warn").hidden = !warns.length;
     $("#warn").textContent = warns.join(" ");
     setupGroups();
+    setupBands();
     renderLists();
   }
 
@@ -148,6 +152,23 @@
     };
   }
 
+  // 대표 평형 (마스터 config/settings.json 의 pyeongBands)
+  function setupBands() {
+    const bands = data.bands || [];
+    const sel = $("#fBand");
+    sel.hidden = !bands.length;
+    sel.innerHTML = `<option value="">전체 평형</option>` +
+      bands.map((b) => `<option value="${esc(b)}">${esc(b)}</option>`).join("");
+    const saved = store.get(BAND_STORE) || "";
+    sel.value = bands.includes(saved) ? saved : "";
+    band = sel.value;
+    sel.onchange = () => {
+      band = sel.value;
+      if (band) store.set(BAND_STORE, band); else store.del(BAND_STORE);
+      renderLists();
+    };
+  }
+
   function renderToday() {
     const cur = store.get(POS_STORE) || "buyer";
     $("#positions").innerHTML = POSITIONS.map((p) =>
@@ -156,11 +177,18 @@
       store.set(POS_STORE, b.dataset.pos); renderToday();
     }));
     const gname = $("#fGroup").value !== "" ? (data.groups || [])[Number($("#fGroup").value)]?.name : null;
-    const src = gname && data.actionsByGroup && data.actionsByGroup[gname] ? data.actionsByGroup[gname] : data.actions;
+    const by = data.actionsBy || {};
+    const src = by[`${gname || ""}|${band}`] || by[`${gname || ""}|`] || data.actions;
     const acts = (src && src[cur]) || [];
     $("#actions").innerHTML = acts.map((a) => `<li>${esc(a)}</li>`).join("") ||
       `<li class="muted">오늘은 추천할 행동이 없습니다.</li>`;
-    $("#summary").innerHTML = data.summary.filter(inGroup).map((s) => `
+    const cards = data.summary.filter((s) => !groupIds || groupIds.has(s.complexId)).map((s) => {
+      if (!band) return s;
+      const b = (s.byBand || {})[band];
+      return b && b.active ? { ...s, active: 0, sale: 0, jeonse: 0, monthly: 0, new: 0, drop: 0, gone: 0, ...b } : null;
+    }).filter(Boolean);
+    $("#summaryNote").textContent = band ? `${band} 기준` : "어제 대비";
+    $("#summary").innerHTML = (cards.map((s) => `
       <div class="card${s.scannedToday && s.complete ? "" : " stale"}">
         <h3>${esc(s.complex)}</h3>
         <div class="big">${s.active}<span class="muted small"> 건</span></div>
@@ -170,7 +198,7 @@
           <span class="tag-drop">인하 ${s.drop}</span>
           <span class="tag-gone">사라짐 ${s.gone}</span>
         </div>
-      </div>`).join("");
+      </div>`).join("")) || `<p class="empty">이 조건의 매물이 없습니다.</p>`;
   }
 
   function itemHtml(u, opt = {}) {
@@ -210,8 +238,8 @@
     const present = new Set(hot.map((h) => h.complex));
     const names = order.filter((n) => present.has(n)).concat([...present].filter((n) => !order.includes(n)));
     fillSelect($("#fComplex"), names, "전체 단지");
-    fillSelect($("#fSupply"), [...new Set(hot.map((h) => h.supply))].sort((a, b) => parseFloat(a) - parseFloat(b))
-      .map(String), "전체 평형");
+    fillSelect($("#fSupply"), [...new Set(hot.map((h) => h.supply))].sort((a, b) => parseFloat(a) - parseFloat(b) || String(a).localeCompare(String(b)))
+      .map(String), "세부 평형 전체");
     const apply = () => {
       const c = $("#fComplex").value, s = $("#fSupply").value, o = $("#fOurs").value;
       const rows = hot.filter((h) => (!c || h.complex === c) && (!s || String(h.supply) === s) &&
@@ -270,16 +298,24 @@
       $("#trend").innerHTML = s;
     }
     // 기준선 표
-    const rows = (data.baselines || []).filter(inGroup);
-    let html = `<thead><tr><th>평형</th><th>거래</th><th>활성</th><th>최저 호가</th><th>호가 중앙값</th><th>기준선</th><th>거래권</th><th>거래권 매물</th></tr></thead><tbody>`;
+    const mode = store.get(BASEMODE_STORE) === "band" ? "band" : "supply";
+    document.querySelectorAll("#baseMode button").forEach((b) => {
+      b.setAttribute("aria-checked", b.dataset.mode === mode);
+      b.onclick = () => { store.set(BASEMODE_STORE, b.dataset.mode); renderMarket(); };
+    });
+    const rows = ((mode === "band" ? data.baselinesByBand : data.baselines) || []).filter(inGroup);
+    let html = `<thead><tr><th>${mode === "band" ? "대표 평형" : "평형"}</th><th>거래</th><th>활성</th><th>최저 호가</th><th>호가 중앙값</th><th>기준선</th><th>거래권</th><th>거래권 매물</th></tr></thead><tbody>`;
     let last = null;
     rows.forEach((r) => {
       if (r.complex !== last) { html += `<tr class="group"><td colspan="8">${esc(r.complex)}</td></tr>`; last = r.complex; }
-      html += `<tr><td>${esc(r.supply)}㎡</td><td>${esc(r.trade)}</td><td>${r.active}</td><td>${esc(r.minText)}</td>` +
+      const label = mode === "band"
+        ? `${esc(r.band)} <span class="muted">${esc((r.supplies || []).join("·"))}</span>`
+        : `${esc(r.supply)}㎡ <span class="muted">${esc(r.band || "")}</span>`;
+      html += `<tr><td>${label}</td><td>${esc(r.trade)}</td><td>${r.active}</td><td>${esc(r.minText)}</td>` +
         `<td>${esc(r.medianText)}</td><td>${esc(r.baselineText) || "-"}${r.baselineN ? ` <span class="muted">(${r.baselineN}건)</span>` : ""}</td>` +
         `<td>${esc(r.zoneText) || "-"}</td><td>${r.inZone || ""}</td></tr>`;
     });
-    $("#baseTable").innerHTML = html + "</tbody>";
+    $("#baseTable").innerHTML = rows.length ? html + "</tbody>" : `<tbody><tr><td class="empty">이 조건의 매물이 없습니다.</td></tr></tbody>`;
   }
 
   load();

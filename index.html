@@ -28,7 +28,10 @@
     </div>
     <div class="sub-row">
       <p id="asof" class="muted"></p>
-      <select id="fGroup" aria-label="단지 그룹" hidden><option value="">전체 단지</option></select>
+      <div class="global-filters">
+        <select id="fGroup" aria-label="단지 그룹" hidden><option value="">전체 단지</option></select>
+        <select id="fBand" aria-label="대표 평형" hidden><option value="">전체 평형</option></select>
+      </div>
     </div>
     <p id="warn" class="warn" hidden></p>
     <nav class="tabs" role="tablist">
@@ -44,14 +47,14 @@
     <h2>오늘의 포지션</h2>
     <div id="positions" class="chips" role="radiogroup"></div>
     <ul id="actions" class="actions"></ul>
-    <h2>단지별 요약 <span class="muted small">어제 대비</span></h2>
+    <h2>단지별 요약 <span id="summaryNote" class="muted small">어제 대비</span></h2>
     <div id="summary" class="cards"></div>
   </section>
 
   <section id="tab-hot" class="tab" hidden>
     <div class="filters">
       <select id="fComplex"><option value="">전체 단지</option></select>
-      <select id="fSupply"><option value="">전체 평형</option></select>
+      <select id="fSupply"><option value="">세부 평형 전체</option></select>
       <select id="fOurs">
         <option value="">우리 매물 포함</option>
         <option value="only">우리 매물만</option>
@@ -78,7 +81,13 @@
   <section id="tab-market" class="tab" hidden>
     <h2>주간 매물 흐름</h2>
     <div id="trend" class="chart"></div>
-    <h2>평형별 기준선</h2>
+    <div class="h2-row">
+      <h2>평형별 기준선</h2>
+      <div id="baseMode" class="seg" role="radiogroup" aria-label="평형 기준">
+        <button type="button" role="radio" data-mode="supply">세부 평형</button>
+        <button type="button" role="radio" data-mode="band">대표 평형</button>
+      </div>
+    </div>
     <p class="muted small">기준선 = 최근 사라진 매물(거래 추정) 마지막 호가의 중앙값. 거래권 = 기준선 ~ +5%.</p>
     <div class="table-wrap"><table id="baseTable"></table></div>
   </section>
