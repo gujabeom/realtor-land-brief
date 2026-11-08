@@ -9,7 +9,8 @@
   const FILTER_STORE = "nlb.filter.v1";
   const BASEMODE_STORE = "nlb.basemode";
   const RANKMODE_STORE = "nlb.rankmode";
-  const RANKSCOPE_STORE = "nlb.rankscope";  // 순위 범위: complex(단지별, 기본) / group(선택한 그룹 통합)   // 급매 점수의 가격 비교 묶음: band(대표 평형, 기본) / supply(세부 평형)
+  const RANKSCOPE_STORE = "nlb.rankscope";  // 순위 범위: complex(단지별, 기본) / group(선택한 그룹 통합)
+  const BASKET_STORE = "nlb.baskets.v1";    // 바구니 (이 기기 브라우저에만 저장)
   const STALE_HOURS = 36;
   const POSITIONS = [
     { id: "buyer", label: "매수 손님 응대" },
@@ -183,10 +184,12 @@
     $("#warn").textContent = warns.join(" ");
     setupGroups();
     setupFilter();
+    setupBasket();
     renderLists();
   }
 
   function renderLists() {
+    renderBasket();
     renderToday();
     renderHot();
     renderChanges();
@@ -472,6 +475,147 @@
   const TRADE_CLASS = { "매매": "sale", "전세": "jeonse", "월세": "monthly", "단기임대": "short" };
   const tradeBadge = (t) => t ? `<span class="tb tb-${TRADE_CLASS[t] || "sale"}">${esc(t)}</span>` : "";
 
+  // ---------- 바구니 (고객별로 매물을 모아 브리핑·답사) ----------
+  const SNAP_KEYS = ["unitId", "complexId", "complex", "trade", "supply", "py", "pyeong", "dong", "floor",
+    "totalFloor", "direction", "priceText", "price", "rent", "article", "band", "feature"];
+  function loadBaskets() {
+    try {
+      const b = JSON.parse(store.get(BASKET_STORE) || "null");
+      if (b && Array.isArray(b.list) && b.list.length) return b;
+    } catch { /* 새로 */ }
+    return { cur: "b1", seq: 1, list: [{ id: "b1", name: "바구니 1", items: [] }] };
+  }
+  let BK = loadBaskets();
+  const saveBk = () => store.set(BASKET_STORE, JSON.stringify(BK));
+  const curBk = () => BK.list.find((b) => b.id === BK.cur) || BK.list[0];
+  const inBk = (uid) => curBk().items.some((i) => i.unitId === uid);
+  let unitById = new Map(), goneById = new Map();
+  const indexUnits = () => {
+    unitById = new Map((data.hot || []).map((h) => [h.unitId, h]));
+    goneById = new Map((data.gone || []).map((h) => [h.unitId, h]));
+  };
+  const bkBtn = (u, opt) => (u.unitId == null ? "" : opt.basket
+    ? `<button type="button" class="bk-btn on" data-uid="${u.unitId}" title="바구니에서 빼기">빼기</button>`
+    : `<button type="button" class="bk-btn${inBk(u.unitId) ? " on" : ""}" data-uid="${u.unitId}">${inBk(u.unitId) ? "✓ 담김" : "+ 담기"}</button>`);
+  function toggleBk(uid) {
+    const b = curBk(), i = b.items.findIndex((x) => x.unitId === uid);
+    if (i >= 0) b.items.splice(i, 1);
+    else {
+      const u = unitById.get(uid);
+      if (!u) return;
+      const snap = {};
+      SNAP_KEYS.forEach((k) => { if (u[k] != null) snap[k] = u[k]; });
+      b.items.push({ unitId: uid, savedAt: new Date().toISOString(), snap, memo: "" });
+    }
+    saveBk();
+    document.querySelectorAll(`.bk-btn[data-uid="${uid}"]`).forEach((x) => {
+      if (x.closest("#bkList")) return;
+      const on = inBk(uid);
+      x.classList.toggle("on", on);
+      x.textContent = on ? "✓ 담김" : "+ 담기";
+    });
+    renderBasket();
+  }
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest(".bk-btn");
+    if (b) toggleBk(Number(b.dataset.uid));
+  });
+  function bkText() {
+    const b = curBk();
+    const lines = [`[${b.name}] ${data.meta.dataDate} 기준 · ${b.items.length}건`];
+    b.items.forEach((it, i) => {
+      const u = unitById.get(it.unitId) || it.snap;
+      const floor = u.totalFloor ? `${u.floor}/${u.totalFloor}층` : `${u.floor || ""}층`;
+      lines.push(`${i + 1}) ${u.complex} ${u.dong ? u.dong + "동 " : ""}${floor} · ${u.supply}㎡${u.py ? `(${u.py}평)` : ""} ${u.direction || ""} · ${u.trade} ${u.priceText}` +
+        (unitById.has(it.unitId) ? "" : " (현재 목록에 없음)"));
+      if (it.memo) lines.push(`   메모: ${it.memo}`);
+      if (u.article && u.complexId) lines.push(`   https://new.land.naver.com/complexes/${u.complexId}?a=APT:ABYG:JGC&e=RETAIL&articleNo=${u.article}`);
+    });
+    return lines.join("\n");
+  }
+  async function copyText(t) {
+    try { await navigator.clipboard.writeText(t); return true; } catch { /* 아래 방법 */ }
+    const ta = document.createElement("textarea");
+    ta.value = t; document.body.appendChild(ta); ta.select();
+    let ok = false;
+    try { ok = document.execCommand("copy"); } catch { /* */ }
+    ta.remove();
+    return ok;
+  }
+  function renderBasket() {
+    if (!data) return;
+    indexUnits();
+    const b = curBk();
+    const n = b.items.length;
+    $("#bkCount").hidden = !n;
+    $("#bkCount").textContent = n;
+    $("#bkSel").innerHTML = BK.list.map((x) =>
+      `<option value="${esc(x.id)}"${x.id === b.id ? " selected" : ""}>${esc(x.name)} (${x.items.length})</option>`).join("");
+    $("#bkDel").disabled = BK.list.length < 2;
+    $("#bkCopy").disabled = $("#bkClear").disabled = !n;
+    $("#bkList").innerHTML = b.items.map((it, i) => {
+      const cur = unitById.get(it.unitId), gone = goneById.get(it.unitId);
+      const u = cur || { ...it.snap, reasons: [] };
+      let status = "";
+      if (!cur) status = `<p class="bk-status warn-text">${gone ? "사라진 매물 (거래 추정)" : "오늘 목록에 없음 (광고 내림·거래 등)"} · 담을 때 ${esc(it.snap.priceText || "")}</p>`;
+      else if (it.snap.price && cur.price !== it.snap.price) {
+        status = `<p class="bk-status ${cur.price < it.snap.price ? "down" : "up"}">담을 때 ${esc(it.snap.priceText)} → 지금 ${esc(cur.priceText)}</p>`;
+      }
+      const extra = `${status}<div class="bk-tools">
+          <input class="bk-memo" data-uid="${it.unitId}" value="${esc(it.memo || "")}" placeholder="메모 (방문 시간, 동호수 확인, 손님 반응 등)">
+          <button type="button" class="ghost bk-mv" data-i="${i}" data-d="-1" title="위로"${i ? "" : " disabled"}>↑</button>
+          <button type="button" class="ghost bk-mv" data-i="${i}" data-d="1" title="아래로"${i < n - 1 ? "" : " disabled"}>↓</button>
+        </div>`;
+      return itemHtml(u, { score: !!cur, basket: true, extra });
+    }).join("") || `<p class="empty">바구니가 비어 있습니다. 급매·가격·변동 탭에서 매물의 '+ 담기'를 누르세요.</p>`;
+    $("#bkList").querySelectorAll(".bk-memo").forEach((inp) => {
+      inp.onchange = () => {
+        const it = curBk().items.find((x) => x.unitId === Number(inp.dataset.uid));
+        if (it) { it.memo = inp.value.trim(); saveBk(); }
+      };
+    });
+    $("#bkList").querySelectorAll(".bk-mv").forEach((btn) => {
+      btn.onclick = () => {
+        const items = curBk().items, i = Number(btn.dataset.i), j = i + Number(btn.dataset.d);
+        if (j < 0 || j >= items.length) return;
+        [items[i], items[j]] = [items[j], items[i]];
+        saveBk(); renderBasket();
+      };
+    });
+  }
+  function setupBasket() {
+    $("#bkSel").onchange = () => { BK.cur = $("#bkSel").value; saveBk(); renderLists(); };
+    $("#bkNew").onclick = () => {
+      const name = (window.prompt("새 바구니 이름 (예: 김OO 고객 34평 매매)", `바구니 ${BK.list.length + 1}`) || "").trim();
+      if (!name) return;
+      BK.seq = (BK.seq || BK.list.length) + 1;
+      const id = `b${BK.seq}_${Date.now().toString(36)}`;
+      BK.list.push({ id, name, items: [] });
+      BK.cur = id; saveBk(); renderLists();
+    };
+    $("#bkRename").onclick = () => {
+      const b = curBk();
+      const name = (window.prompt("바구니 이름", b.name) || "").trim();
+      if (name) { b.name = name; saveBk(); renderBasket(); }
+    };
+    $("#bkDel").onclick = () => {
+      const b = curBk();
+      if (BK.list.length < 2 || !window.confirm(`'${b.name}' 바구니를 삭제할까요? (담긴 ${b.items.length}건)`)) return;
+      BK.list = BK.list.filter((x) => x !== b);
+      BK.cur = BK.list[0].id; saveBk(); renderLists();
+    };
+    $("#bkClear").onclick = () => {
+      const b = curBk();
+      if (!window.confirm(`'${b.name}'의 매물 ${b.items.length}건을 모두 뺄까요?`)) return;
+      b.items = []; saveBk(); renderLists();
+    };
+    $("#bkCopy").onclick = async () => {
+      const ok = await copyText(bkText());
+      $("#bkMsg").textContent = ok ? "복사했습니다. 카톡·문자에 붙여넣으세요." : "복사하지 못했습니다.";
+      setTimeout(() => { $("#bkMsg").textContent = ""; }, 4000);
+    };
+  }
+
   // 네이버 부동산 매물 화면 (사라진 매물은 광고가 내려가 열리지 않으므로 생략)
   const naverLink = (u, opt) => (u.article && u.complexId && !opt.gone
     ? `<a class="nv-btn" href="https://new.land.naver.com/complexes/${encodeURIComponent(u.complexId)}?a=APT:ABYG:JGC&e=RETAIL&articleNo=${encodeURIComponent(u.article)}" target="_blank" rel="noopener noreferrer">네이버 부동산</a>`
@@ -493,11 +637,12 @@
     const reasons = (u.reasons || []).map((r) => `<span>${esc(r)}</span>`).join("");
     return `<article class="item${u.ours ? " ours" : ""}${opt.score ? "" : " noscore"}">
       ${opt.score ? `<div class="score" title="점수">${Math.round(u.score)}</div>` : ""}
-      <div class="title">${tradeBadge(u.trade)}${esc(u.complex)}${ours}${naverLink(u, opt)}</div>
+      <div class="title">${tradeBadge(u.trade)}${esc(u.complex)}${ours}${naverLink(u, opt)}${opt.gone ? "" : bkBtn(u, opt)}</div>
       <div class="price pr-${tcls}">${price}</div>
       <div class="meta">${esc(meta)}</div>
       ${reasons ? `<div class="reasons">${reasons}</div>` : ""}
       ${u.feature ? `<div class="feature">${esc(u.feature)}</div>` : ""}
+      ${opt.extra || ""}
     </article>`;
   }
 
