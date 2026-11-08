@@ -469,11 +469,9 @@
   // 순위 기준에 맞는 점수로 바꾼 급매 목록 (점수 높은 순)
   const rankMode = () => (store.get(RANKMODE_STORE) === "supply" ? "supply" : "band");
   const rankScope = () => (store.get(RANKSCOPE_STORE) === "group" ? "group" : "complex");
-  // 점수 비중·기준 (master/score.py 와 같게 유지)
-  const W = { rank: 9, drop: 3, gap: 2, broker: 1, keyword: 1.5 };
-  const RANK_ZERO = 0.05, CHEAP_G = 0.02, MID_G = 0.05;
-  // 그룹 통합 순위: 선택한 그룹(없으면 전체 단지)의 같은 거래·같은 평형 활성 매물 전체와 가격을 비교해 다시 계산
-  function groupScores(list, mode) {
+  // 그룹 통합: 점수는 단지별 계산 그대로 두고, 가격 순위만 선택한 그룹(없으면 전체 단지) 전체에서 다시 센다.
+  // 순위 모집단 = 그룹 안의 같은 거래·같은 평형 활성 매물 전체 (필터와 무관하게 고정)
+  function groupRanks(list, mode) {
     const peers = {};
     (data.units || []).forEach((r) => {
       if (groupIds && !groupIds.has(r[0])) return;
@@ -481,43 +479,27 @@
       (peers[k] = peers[k] || []).push(r[3]);
     });
     const rng = data.bandRanges || {};
-    const scopeName = groupIds ? "그룹 내" : "전체 단지";
+    const scopeName = groupIds ? "그룹" : "전체 단지";
     return list.map((h) => {
-      const sp = h.sp;
-      if (!sp) return h;
       const ps = peers[h.trade + "|" + (mode === "band" ? h.band : h.supply)] || [h.price];
-      const n = ps.length, low = Math.min(...ps), rank = ps.filter((p) => p < h.price).length;
-      const g = low ? h.price / low - 1 : 0;
-      let rs = n > 1 ? Math.max(0, 1 - g / RANK_ZERO) : 0.5;
-      if (sp.lf) rs *= 0.7;
-      const pos = g <= CHEAP_G ? 1 : Math.max(0, (MID_G - g) / (MID_G - CHEAP_G));
-      const reasons = [];
-      if (sp.lf) reasons.push("저층");
-      const label = `${scopeName} ${mode === "band" ? (rng[h.band] || h.band) : h.supply + "㎡"}`;
-      if (rank < 3 && n >= 3) reasons.push(`${label} 중 낮은 가격 ${rank + 1}위/${n}`);
-      let drop = 0;
-      if (sp.d) {
-        drop = sp.d * pos;
-        reasons.push(sp.dt + (pos >= 1 ? " → 최저권" : pos <= 0 ? `, 그래도 ${rank + 1}위/${n}` : ""));
-      } else if (sp.r) { drop = sp.r; reasons.push(sp.rt); }
-      const gap = mode === "band" ? sp.g : sp.gS, gt = mode === "band" ? sp.gt : sp.gtS;
-      if (gap != null && gt) reasons.push(gt);
-      if (sp.bt) reasons.push(sp.bt);
-      if (sp.kt) reasons.push(sp.kt);
-      let num = W.rank * rs + W.drop * drop + W.broker * (sp.b || 0) + W.keyword * (sp.k || 0);
-      let den = W.rank + W.drop + W.broker + W.keyword;
-      if (gap != null) { num += W.gap * gap; den += W.gap; }
-      return { ...h, score: Math.max(0, Math.round((1000 * num) / den) / 10), reasons };
+      const rank = ps.filter((p) => p < h.price).length + 1;   // 같은 가격은 같은 순위
+      const cr = mode === "band" ? h.groupRank : h.groupRankS, cn = mode === "band" ? h.groupSize : h.groupSizeS;
+      const label = mode === "band" ? (rng[h.band] || h.band) : `${h.supply}㎡`;
+      const chip = `${label} ${scopeName} ${rank}위/${ps.length}` + (cr ? ` · 단지 ${cr}위/${cn}` : "");
+      const rest = (h.reasons || []).filter((t) => !t.includes(" 중 낮은 가격 "));
+      const at = rest[0] === "저층" ? 1 : 0;
+      return { ...h, groupWideRank: rank, reasons: [...rest.slice(0, at), chip, ...rest.slice(at)] };
     });
   }
   function hotList() {
     const list = data.hot || [];
     const mode = rankMode();
-    let out;
-    if (rankScope() === "group" && list.some((h) => h.sp)) out = groupScores(list, mode);
-    else if (mode === "band" || !list.some((h) => h.scoreS != null)) return list;
-    else out = list.map((h) => ({ ...h, score: h.scoreS ?? h.score, reasons: h.reasonsS || h.reasons }));
-    return out.sort((a, b) => (b.score || 0) - (a.score || 0));
+    let out = list;
+    if (mode === "supply" && list.some((h) => h.scoreS != null)) {
+      out = list.map((h) => ({ ...h, score: h.scoreS ?? h.score, reasons: h.reasonsS || h.reasons }))
+        .sort((a, b) => (b.score || 0) - (a.score || 0));
+    }
+    return rankScope() === "group" ? groupRanks(out, mode) : out;
   }
 
   function renderHot() {
