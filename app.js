@@ -555,9 +555,28 @@
     });
     renderBasket();
   }
-  document.addEventListener("click", (e) => {
+  // 바구니 탭의 '빼기'는 한 번 더 묻는다 (메모도 함께 지워지므로). 다른 탭의 담기/담김 토글은 바로 처리
+  function askRemove(uid) {
+    const it = curBk().items.find((x) => x.unitId === uid);
+    if (!it) return Promise.resolve(false);
+    const u = unitById.get(uid) || it.snap;
+    const what = [u.complex, u.dong && `${u.dong}동`, u.floor && `${u.floor}층`, u.priceText].filter(Boolean).join(" ");
+    const msg = `'${what}' 매물을 '${curBk().name}'에서 뺄까요?` + (it.memo ? " 적어 둔 메모도 함께 지워집니다." : "");
+    const dlg = $("#bkRemoveDlg");
+    if (typeof dlg.showModal !== "function") return Promise.resolve(window.confirm(msg));
+    $("#bkRemoveText").textContent = msg;
+    return new Promise((res) => {
+      dlg.returnValue = "";
+      dlg.onclose = () => res(dlg.returnValue === "ok");
+      dlg.showModal();
+    });
+  }
+  document.addEventListener("click", async (e) => {
     const b = e.target.closest(".bk-btn");
-    if (b) toggleBk(Number(b.dataset.uid));
+    if (!b) return;
+    const uid = Number(b.dataset.uid);
+    if (b.closest("#bkList") && !(await askRemove(uid))) return;
+    toggleBk(uid);
   });
   function bkText(work = false) {
     const b = curBk();
