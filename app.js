@@ -493,7 +493,30 @@
 
   // ---------- 바구니 (고객별로 매물을 모아 브리핑·답사) ----------
   const SNAP_KEYS = ["unitId", "complexId", "complex", "trade", "supply", "py", "pyeong", "dong", "floor",
-    "totalFloor", "direction", "priceText", "price", "rent", "article", "band", "feature"];
+    "totalFloor", "direction", "priceText", "price", "rent", "article", "band", "feature", "ads"];
+  const wonText = (won) => {
+    const m = Math.round((won || 0) / 10000);
+    if (!m) return "";
+    const eok = Math.floor(m / 10000), rest = m % 10000;
+    return eok ? `${eok}억${rest ? ` ${rest.toLocaleString("ko-KR")}` : ""}` : rest.toLocaleString("ko-KR");
+  };
+  const adPrice = (a) => wonText(a[1]) + (a[2] ? `/${Math.round(a[2] / 10000).toLocaleString("ko-KR")}` : "");
+  const nvUrl = (cid, art) => `https://new.land.naver.com/complexes/${encodeURIComponent(cid)}?a=APT:ABYG:JGC&e=RETAIL&articleNo=${encodeURIComponent(art)}`;
+  // 중개사 목록 (바구니): 우리 사무소 먼저, 낮은 호가 순. 전화번호는 목록 데이터에 없어 네이버 지도 검색으로 연결
+  function adsHtml(u) {
+    const ads = u.ads || [];
+    if (!ads.length) return "";
+    const ps = ads.map((a) => a[1]).filter(Boolean);
+    const lo = Math.min(...ps), hi = Math.max(...ps);
+    const range = ps.length ? (lo === hi ? wonText(lo) : `${wonText(lo)} ~ ${wonText(hi)}`) : "";
+    return `<details class="bk-ads"><summary>중개사 ${ads.length}곳${range ? ` · 호가 ${esc(range)}` : ""}</summary><ul>` +
+      ads.map((a) => `<li${a[4] ? ' class="ours"' : ""}>
+        <span class="bk-ad-name">${a[4] ? '<span class="badge-ours">우리</span> ' : ""}${esc(a[0] || "(이름 없음)")}</span>
+        <span class="bk-ad-price${a[1] !== lo ? " hi" : ""}">${esc(adPrice(a))}</span>
+        <span class="bk-ad-links">${a[3] && u.complexId ? `<a href="${nvUrl(u.complexId, a[3])}" target="_blank" rel="noopener noreferrer">광고</a>` : ""}
+        ${a[0] ? `<a href="https://map.naver.com/p/search/${encodeURIComponent(a[0])}" target="_blank" rel="noopener noreferrer">연락처</a>` : ""}</span>
+      </li>`).join("") + `</ul></details>`;
+  }
   function loadBaskets() {
     try {
       const b = JSON.parse(store.get(BASKET_STORE) || "null");
@@ -536,7 +559,7 @@
     const b = e.target.closest(".bk-btn");
     if (b) toggleBk(Number(b.dataset.uid));
   });
-  function bkText() {
+  function bkText(work = false) {
     const b = curBk();
     const lines = [`[${b.name}] ${data.meta.dataDate} 기준 · ${b.items.length}건`];
     b.items.forEach((it, i) => {
@@ -545,6 +568,9 @@
       lines.push(`${i + 1}) ${u.complex} ${u.dong ? u.dong + "동 " : ""}${floor} · ${u.supply}㎡${u.py ? `(${u.py}평)` : ""} ${u.direction || ""} · ${u.trade} ${u.priceText}` +
         (unitById.has(it.unitId) ? "" : " (현재 목록에 없음)"));
       if (it.memo) lines.push(`   메모: ${it.memo}`);
+      if (work && (u.ads || []).length) {
+        lines.push(`   중개사 ${u.ads.length}곳: ` + u.ads.map((a) => `${a[0]}(${adPrice(a)})`).join(", "));
+      }
       if (u.article && u.complexId) lines.push(`   https://new.land.naver.com/complexes/${u.complexId}?a=APT:ABYG:JGC&e=RETAIL&articleNo=${u.article}`);
     });
     return lines.join("\n");
@@ -568,7 +594,7 @@
     $("#bkSel").innerHTML = BK.list.map((x) =>
       `<option value="${esc(x.id)}"${x.id === b.id ? " selected" : ""}>${esc(x.name)} (${x.items.length})</option>`).join("");
     $("#bkDel").disabled = BK.list.length < 2;
-    $("#bkCopy").disabled = $("#bkClear").disabled = $("#bkShare").disabled = !n;
+    $("#bkCopy").disabled = $("#bkCopyWork").disabled = $("#bkClear").disabled = $("#bkShare").disabled = !n;
     $("#bkList").innerHTML = b.items.map((it, i) => {
       const cur = unitById.get(it.unitId), gone = goneById.get(it.unitId);
       const u = cur || { ...it.snap, reasons: [] };
@@ -577,7 +603,7 @@
       else if (it.snap.price && cur.price !== it.snap.price) {
         status = `<p class="bk-status ${cur.price < it.snap.price ? "down" : "up"}">담을 때 ${esc(it.snap.priceText)} → 지금 ${esc(cur.priceText)}</p>`;
       }
-      const extra = `${status}<div class="bk-tools">
+      const extra = `${status}${adsHtml(u)}<div class="bk-tools">
           <input class="bk-memo" data-uid="${it.unitId}" value="${esc(it.memo || "")}" placeholder="메모 (방문 시간, 동호수 확인, 손님 반응 등)">
           <button type="button" class="ghost bk-mv" data-i="${i}" data-d="-1" title="위로"${i ? "" : " disabled"}>↑</button>
           <button type="button" class="ghost bk-mv" data-i="${i}" data-d="1" title="아래로"${i < n - 1 ? "" : " disabled"}>↓</button>
@@ -715,6 +741,11 @@
       const b = curBk();
       if (!window.confirm(`'${b.name}'의 매물 ${b.items.length}건을 모두 뺄까요?`)) return;
       b.items = []; saveBk(); renderLists();
+    };
+    $("#bkCopyWork").onclick = async () => {
+      const ok = await copyText(bkText(true));
+      $("#bkMsg").textContent = ok ? "중개사 목록까지 복사했습니다 (내부 업무용)." : "복사하지 못했습니다.";
+      setTimeout(() => { $("#bkMsg").textContent = ""; }, 4000);
     };
     $("#bkCopy").onclick = async () => {
       const ok = await copyText(bkText());
