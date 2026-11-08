@@ -472,6 +472,11 @@
   const TRADE_CLASS = { "매매": "sale", "전세": "jeonse", "월세": "monthly", "단기임대": "short" };
   const tradeBadge = (t) => t ? `<span class="tb tb-${TRADE_CLASS[t] || "sale"}">${esc(t)}</span>` : "";
 
+  // 네이버 부동산 매물 화면 (사라진 매물은 광고가 내려가 열리지 않으므로 생략)
+  const naverLink = (u, opt) => (u.article && u.complexId && !opt.gone
+    ? `<a class="nv-btn" href="https://new.land.naver.com/complexes/${encodeURIComponent(u.complexId)}?a=APT:ABYG:JGC&e=RETAIL&articleNo=${encodeURIComponent(u.article)}" target="_blank" rel="noopener noreferrer">네이버 부동산</a>`
+    : "");
+
   function itemHtml(u, opt = {}) {
     const tcls = TRADE_CLASS[u.trade] || "sale";
     const ours = u.ours ? `<span class="badge-ours">우리</span>` : "";
@@ -488,7 +493,7 @@
     const reasons = (u.reasons || []).map((r) => `<span>${esc(r)}</span>`).join("");
     return `<article class="item${u.ours ? " ours" : ""}${opt.score ? "" : " noscore"}">
       ${opt.score ? `<div class="score" title="점수">${Math.round(u.score)}</div>` : ""}
-      <div class="title">${tradeBadge(u.trade)}${esc(u.complex)}${ours}</div>
+      <div class="title">${tradeBadge(u.trade)}${esc(u.complex)}${ours}${naverLink(u, opt)}</div>
       <div class="price pr-${tcls}">${price}</div>
       <div class="meta">${esc(meta)}</div>
       ${reasons ? `<div class="reasons">${reasons}</div>` : ""}

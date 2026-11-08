@@ -239,7 +239,12 @@ tr.group td { background: var(--bg); font-weight: 600; text-align: left; }
 .msel-pop .msel-all { border-bottom: 1px solid var(--line); }
 .msel-pop input { width: 16px; height: 16px; accent-color: var(--accent); }
 .lnk { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; text-align: left; }
-.lnk:hover { text-decoration: underline; text-underline-offset: 3px; }
+.lnk { text-decoration: underline dotted; text-decoration-color: color-mix(in srgb, currentColor 40%, transparent); text-underline-offset: 3px; }
+.lnk:hover { text-decoration: underline; text-decoration-color: currentColor; }
+.card .big .lnk { text-decoration: none; }
 .card h3 .lnk { font-weight: inherit; }
 #chgScope { margin-top: 16px; }
 #chgScope button { background: none; border: 0; color: var(--muted); text-decoration: underline; cursor: pointer; font: inherit; }
+.nv-btn { display: inline-block; margin-left: 8px; padding: 1px 8px; font-size: 12px; font-weight: 600; line-height: 1.6;
+  color: #03a94d; border: 1px solid #03a94d; border-radius: 6px; text-decoration: none; vertical-align: 2px; white-space: nowrap; }
+.nv-btn:hover { background: #03a94d; color: #fff; }
