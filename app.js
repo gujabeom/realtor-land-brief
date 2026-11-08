@@ -174,11 +174,27 @@
       groupIds = sel.value !== "" && g ? new Set(g.ids) : null;
     };
     apply();
+    // 그룹(큰 분류)을 바꾸면 급매 탭의 단지·세부 평형 선택은 초기화
+    const resetLocal = () => { $("#fComplex").value = ""; $("#fSupply").value = ""; };
+    let clicks = 0, changed = false;
     sel.onchange = () => {
+      changed = true;
       apply();
       if (sel.value === "") store.del(GROUP_STORE); else store.set(GROUP_STORE, groups[Number(sel.value)].name);
+      resetLocal();
       renderLists();
     };
+    // 같은 그룹을 다시 골라도 초기화 (PC 브라우저: 목록을 열고 닫는 두 번째 클릭으로 판단)
+    sel.addEventListener("click", () => {
+      clicks += 1;
+      if (clicks % 2 === 0) {
+        if (!changed && ($("#fComplex").value || $("#fSupply").value)) { resetLocal(); renderLists(); }
+        changed = false;
+      }
+    });
+    const disarm = () => { clicks = 0; changed = false; };
+    sel.addEventListener("blur", disarm);
+    sel.addEventListener("keydown", (e) => { if (e.key === "Escape" || e.key === "Tab") disarm(); });
   }
 
   // ---------- 필터 패널 ----------
