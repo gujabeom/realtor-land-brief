@@ -42,7 +42,7 @@
   const DIRS = ["동", "남동", "서", "남서", "남", "북동", "북", "북서"];
   const TAGS = ["올수리", "복층", "급매", "세안고"];
   const emptyF = () => ({ trades: [], bands: [], pmin: null, pmax: null, rmin: null, rmax: null,
-    floor: "", rooms: "", baths: "", dirs: [], tags: [] });
+    floors: [], rooms: [], baths: [], dirs: [], tags: [] });
   let F = emptyF();
   // 층 구분: 1층 / 탑층 / 저층(아래 1/3, 1층 포함) / 중간층 / 고층(위 1/3, 탑층 포함). '저·중·고'로만 공개된 층도 반영
   const floorIs = (x, want) => {
@@ -58,9 +58,12 @@
     return n > (2 * t) / 3;     // 고층
   };
   const cntIs = (v, want) => !want || (want === "4" ? v >= 4 : v === Number(want));
-  const passAttr = (x) => floorIs(x, F.floor) && cntIs(x.rooms || 0, F.rooms) && cntIs(x.baths || 0, F.baths) &&
+  // 층수·방 수·욕실 수: 여러 개 고르면 그중 하나라도 맞으면 (예: 저층 + 탑층)
+  const anyOf = (list, test) => !list.length || list.some(test);
+  const passAttr = (x) => anyOf(F.floors, (w) => floorIs(x, w)) && anyOf(F.rooms, (w) => cntIs(x.rooms || 0, w)) &&
+    anyOf(F.baths, (w) => cntIs(x.baths || 0, w)) &&
     (!F.dirs.length || F.dirs.includes(x.dir)) && F.tags.every((t) => (x.tags || []).includes(t));
-  const attrOn = () => !!(F.floor || F.rooms || F.baths || F.dirs.length || F.tags.length);
+  const attrOn = () => !!(F.floors.length || F.rooms.length || F.baths.length || F.dirs.length || F.tags.length);
   const inGroupOnly = (x) => !groupIds || groupIds.has(x.complexId);
   const passBase = (x) => (!F.trades.length || F.trades.includes(x.trade)) &&
     (!F.bands.length || F.bands.includes(x.band));
@@ -75,7 +78,7 @@
   const inGroup = (x) => inGroupOnly(x) && passBase(x) && passPrice(x) && passAttr(x);
   const filterCount = () => (F.trades.length ? 1 : 0) + (F.bands.length ? 1 : 0) +
     (F.pmin != null || F.pmax != null ? 1 : 0) + (F.rmin != null || F.rmax != null ? 1 : 0) +
-    (F.floor ? 1 : 0) + (F.rooms ? 1 : 0) + (F.baths ? 1 : 0) + (F.dirs.length ? 1 : 0) + (F.tags.length ? 1 : 0);
+    (F.floors.length ? 1 : 0) + (F.rooms.length ? 1 : 0) + (F.baths.length ? 1 : 0) + (F.dirs.length ? 1 : 0) + (F.tags.length ? 1 : 0);
 
   // ---------- 복호화 ----------
   async function deriveKey(password, salt, iter) {
@@ -247,9 +250,9 @@
       F = { trades: (f.trades || []).filter((t) => TRADES.includes(t)),
         bands: (f.bands || []).filter((b) => (data.bands || []).includes(b)),
         pmin: f.pmin ?? null, pmax: f.pmax ?? null, rmin: f.rmin ?? null, rmax: f.rmax ?? null,
-        floor: FLOORS.includes(f.floor) ? f.floor : "",
-        rooms: COUNTS.some((c) => c[0] === f.rooms) ? f.rooms : "",
-        baths: COUNTS.some((c) => c[0] === f.baths) ? f.baths : "",
+        floors: [].concat(f.floors || f.floor || []).filter((v) => FLOORS.includes(v)),
+        rooms: [].concat(f.rooms || []).filter((v) => COUNTS.some((c) => c[0] === v)),
+        baths: [].concat(f.baths || []).filter((v) => COUNTS.some((c) => c[0] === v)),
         dirs: (f.dirs || []).filter((d) => DIRS.includes(d)), tags: (f.tags || []).filter((t) => TAGS.includes(t)) };
     } catch { /* 기본값 */ }
   }
@@ -281,15 +284,17 @@
       }).join("");
       el.querySelectorAll("button").forEach((b) => { b.onclick = () => stepClick(rent ? "r" : "p", Number(b.dataset.v)); });
     };
-    // 한 개만 고르는 칸 (전체 포함)
-    const single = (el, key, opts) => {
+    // 여러 개 고르는 칸 + '전체'(= 선택 해제)
+    const multi = (el, key, opts) => {
       el.innerHTML = [["", "전체"], ...opts].map(([v, t]) =>
-        `<button type="button" aria-pressed="${F[key] === v}" data-v="${esc(v)}">${esc(t)}</button>`).join("");
-      el.querySelectorAll("button").forEach((b) => { b.onclick = () => { F[key] = b.dataset.v; filterChanged(); }; });
+        `<button type="button" aria-pressed="${v ? F[key].includes(v) : !F[key].length}" data-v="${esc(v)}">${esc(t)}</button>`).join("");
+      el.querySelectorAll("button").forEach((b) => {
+        b.onclick = () => { if (b.dataset.v) toggle(key, b.dataset.v); else { F[key] = []; filterChanged(); } };
+      });
     };
-    single($("#fpFloor"), "floor", FLOORS.map((v) => [v, v]));
-    single($("#fpRooms"), "rooms", COUNTS);
-    single($("#fpBaths"), "baths", COUNTS);
+    multi($("#fpFloor"), "floors", FLOORS.map((v) => [v, v]));
+    multi($("#fpRooms"), "rooms", COUNTS);
+    multi($("#fpBaths"), "baths", COUNTS);
     $("#fpDir").innerHTML = chip(DIRS, F.dirs, "d");
     $("#fpDir").querySelectorAll("button").forEach((b) => { b.onclick = () => toggle("dirs", b.dataset.d); });
     $("#fpTag").innerHTML = chip(TAGS, F.tags, "g");
@@ -310,9 +315,10 @@
     if (F.bands.length) parts.push(F.bands.map((b) => (data.bandRanges || {})[b] || b).join("·"));
     if (F.pmin != null || F.pmax != null) parts.push(`${manText(F.pmin) || "0"} ~ ${manText(F.pmax) || ""}`.trim());
     if (F.rmin != null || F.rmax != null) parts.push(`월세 ${F.rmin ?? 0} ~ ${F.rmax ?? ""}`.trim());
-    if (F.floor) parts.push(F.floor);
-    if (F.rooms) parts.push(`방 ${F.rooms === "4" ? "4개 이상" : F.rooms + "개"}`);
-    if (F.baths) parts.push(`욕실 ${F.baths === "4" ? "4개 이상" : F.baths + "개"}`);
+    const cnt = (l) => l.map((v) => (v === "4" ? "4개 이상" : v + "개")).join("·");
+    if (F.floors.length) parts.push(F.floors.join("·"));
+    if (F.rooms.length) parts.push(`방 ${cnt(F.rooms)}`);
+    if (F.baths.length) parts.push(`욕실 ${cnt(F.baths)}`);
     if (F.dirs.length) parts.push(F.dirs.map((d) => d + "향").join("·"));
     if (F.tags.length) parts.push(F.tags.join("·"));
     $("#filterSummary").hidden = !parts.length;
